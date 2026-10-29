@@ -1,6 +1,6 @@
 export type Role = 'admin' | 'client'
 
-export interface Prefs { inv: boolean; tick: boolean; renew: boolean; news: boolean }
+export interface Prefs { inv: boolean; svc: boolean; tick: boolean; renew: boolean; news: boolean }
 
 export interface User {
   id: number

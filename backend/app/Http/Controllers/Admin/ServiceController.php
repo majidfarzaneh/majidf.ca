@@ -7,6 +7,7 @@ use App\Enums\ServiceStatus;
 use App\Enums\ServiceType;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ServiceResource;
+use App\Mail\ServiceAddedMail;
 use App\Models\Activity;
 use App\Models\Service;
 use App\Services\UptimeReport;
@@ -14,6 +15,7 @@ use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -41,8 +43,14 @@ class ServiceController extends Controller
 
     public function store(Request $request): ServiceResource
     {
+        $notify = $request->validate(['notify' => ['boolean']])['notify'] ?? true;
         $service = Service::create($this->validated($request));
         Activity::log($service->user_id, 'service', $service->type->label().' added · '.$service->name, $service);
+
+        // "Email the client" in the admin form; untick it when recording a service the client already knows about.
+        if ($notify && $service->status !== ServiceStatus::Cancelled && $service->user->wants('svc')) {
+            Mail::to($service->user)->queue(new ServiceAddedMail($service));
+        }
 
         return new ServiceResource($service->load('user'));
     }

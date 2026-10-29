@@ -18,7 +18,7 @@ class User extends Authenticatable
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
 
-    public const DEFAULT_PREFS = ['inv' => true, 'tick' => true, 'renew' => true, 'news' => false];
+    public const DEFAULT_PREFS = ['inv' => true, 'svc' => true, 'tick' => true, 'renew' => true, 'news' => false];
 
     protected function casts(): array
     {

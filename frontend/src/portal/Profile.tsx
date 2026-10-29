@@ -9,6 +9,7 @@ import type { Me, Prefs, User } from '../lib/types'
 
 const NOTIFS: [keyof Prefs, string, string][] = [
   ['inv', 'New invoices', 'When an invoice is issued or due'],
+  ['svc', 'New services', 'When a service is added to your account'],
   ['tick', 'Ticket replies', 'When I answer a ticket'],
   ['renew', 'Renewals', '14 days before a service renews'],
   ['news', 'Product updates', 'Occasional, a few times a year'],

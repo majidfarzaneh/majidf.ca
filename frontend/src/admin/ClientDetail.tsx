@@ -162,7 +162,7 @@ export default function ClientDetail() {
             <dt>Address</dt><dd style={{ whiteSpace: 'pre-line' }}>{c.address || '—'}</dd>
             <dt>Client since</dt><dd>{fmtDate(c.created_at)}</dd>
             <dt>Last sign-in</dt><dd>{c.last_login_at ? `${ago(c.last_login_at)}${c.last_login_ip ? ` · ${c.last_login_ip}` : ''}` : 'Never'}</dd>
-            <dt>Emails</dt><dd>{Object.entries(c.prefs).filter(([, v]) => v).map(([k]) => ({ inv: 'invoices', tick: 'tickets', renew: 'renewals', news: 'news' })[k]).join(', ') || 'none'}</dd>
+            <dt>Emails</dt><dd>{Object.entries(c.prefs).filter(([, v]) => v).map(([k]) => ({ inv: 'invoices', svc: 'services', tick: 'tickets', renew: 'renewals', news: 'news' })[k]).join(', ') || 'none'}</dd>
           </dl>
           {c.admin_notes && (<><hr className="divider" /><span className="eyebrow">private notes</span><p className="muted" style={{ margin: 0, fontSize: 13, whiteSpace: 'pre-wrap' }}>{c.admin_notes}</p></>)}
           <hr className="divider" />

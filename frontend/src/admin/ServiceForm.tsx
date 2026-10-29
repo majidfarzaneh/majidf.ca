@@ -32,6 +32,7 @@ export default function ServiceForm({ service, userId, onClose }: { service?: Se
     monitor_url: service?.monitor_url ?? '',
     sort: service?.sort ?? 0,
   })
+  const [notify, setNotify] = useState(true)
 
   const payload = () => {
     const nullable = (v: string) => (v === '' ? null : v)
@@ -45,7 +46,7 @@ export default function ServiceForm({ service, userId, onClose }: { service?: Se
   }
 
   const save = useMutation({
-    mutationFn: () => (service ? api.put(`/admin/services/${service.id}`, payload()) : api.post('/admin/services', payload())),
+    mutationFn: () => (service ? api.put(`/admin/services/${service.id}`, payload()) : api.post('/admin/services', { ...payload(), notify })),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: adminKeys.all })
       toast.ok(service ? 'Service updated' : 'Service added')
@@ -114,6 +115,12 @@ export default function ServiceForm({ service, userId, onClose }: { service?: Se
             <Field label="started on" error={err('started_at')}><input className="input" type="date" value={f.started_at} onChange={set('started_at')} /></Field>
             <Field label="uptime monitor url" error={err('monitor_url')} hint="Pinged every 5 minutes."><input className="input" type="url" value={f.monitor_url} onChange={set('monitor_url')} placeholder="https://" /></Field>
           </div>
+          {!service && (
+            <label className="checkbox">
+              <input type="checkbox" checked={notify} onChange={(e) => setNotify(e.target.checked)} />
+              Email the client about this service (skipped if they turned off "New services" emails)
+            </label>
+          )}
         </div>
         <div className="modal-foot" style={{ justifyContent: 'space-between' }}>
           <div>{service && <button type="button" className="btn btn-danger" disabled={remove.isPending} onClick={() => { if (confirm(`Delete ${service.name}? This can't be undone.`)) remove.mutate() }}>Delete</button>}</div>
