@@ -68,7 +68,7 @@ services:
     depends_on:
       app: { condition: service_healthy }
     restart: unless-stopped
-    mem_limit: 64m
+    mem_limit: 128m
     logging: *logging
 
   mysql:

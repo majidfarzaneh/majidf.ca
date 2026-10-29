@@ -16,7 +16,7 @@ mkdir -p "$DEST" && chmod 700 "$DEST"
 dump="$DEST/$DB-$STAMP.sql.gz"
 # The database runs in the compose stack's mysql container (127.0.0.1:3307).
 docker compose -f "$APP_DIR/docker-compose.prod.yml" exec -T mysql sh -c \
-  'exec mysqldump -h 127.0.0.1 -P 3307 -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --quick --routines --triggers --no-tablespaces "$MYSQL_DATABASE"' \
+  'MYSQL_PWD="$MYSQL_ROOT_PASSWORD" exec mysqldump -h 127.0.0.1 -P 3307 -uroot --single-transaction --quick --routines --triggers --no-tablespaces "$MYSQL_DATABASE"' \
   | gzip -9 > "$dump.tmp"
 gzip -t "$dump.tmp"
 zcat "$dump.tmp" | tail -n 1 | grep -q 'Dump completed' || { echo "dump incomplete: $dump" >&2; rm -f "$dump.tmp"; exit 1; }
