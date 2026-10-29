@@ -8,6 +8,7 @@ use App\Models\Invoice;
 use App\Models\LoginCode;
 use App\Models\Service;
 use App\Services\InvoiceManager;
+use App\Services\StripeGateway;
 use App\Support\Money;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -18,17 +19,21 @@ use Illuminate\Support\Facades\Mail;
 #[Description('Daily: issue recurring invoices, send renewal and invoice reminders, prune expired sign-in codes')]
 class RunBilling extends Command
 {
-    public function handle(InvoiceManager $invoices): void
+    public function handle(InvoiceManager $invoices, StripeGateway $stripe): void
     {
-        $this->recurringInvoices($invoices);
+        $this->recurringInvoices($invoices, $stripe);
         $this->renewalReminders();
         $this->invoiceReminders($invoices);
 
         LoginCode::query()->where('expires_at', '<', now()->subDay())->delete();
     }
 
-    /** Services with auto-invoicing get an invoice on their renewal date, then roll forward one cycle. */
-    private function recurringInvoices(InvoiceManager $invoices): void
+    /**
+     * Services with auto-invoicing get an invoice on their renewal date, then roll forward one cycle.
+     * Clients with auto-pay are charged on their saved card instead of being emailed the invoice:
+     * success sends the receipt; a decline emails the invoice with "auto-pay failed" (PaymentRecorder).
+     */
+    private function recurringInvoices(InvoiceManager $invoices, StripeGateway $stripe): void
     {
         $due = Service::query()->with('user')->where('auto_invoice', true)
             ->where('status', ServiceStatus::Active)
@@ -51,7 +56,12 @@ class RunBilling extends Command
                 'quantity' => 1,
                 'unit_price' => $service->price_cents / 100,
             ]]);
-            $invoices->send($invoice);
+            $autopay = $service->user->autopayEnabled() && $stripe->enabled();
+            $invoices->send($invoice, email: ! $autopay);
+            if ($autopay) {
+                $payment = $stripe->chargeSavedCard($invoice);
+                $this->line("Auto-pay {$invoice->number}: {$payment->status}");
+            }
 
             $service->update(['renews_at' => $service->billing_cycle->advance($service->renews_at)]);
             $service->forceFill(['renewal_reminded_at' => null])->save();

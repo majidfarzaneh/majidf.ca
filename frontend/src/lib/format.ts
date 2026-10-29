@@ -102,3 +102,9 @@ export function addDays(isoDate: string, days: number): string {
 export function fileSize(bytes: number): string {
   return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`
 }
+
+/** "Visa •••• 4242 · 08/30" for a saved card. */
+export function cardLabel(card: { brand: string; last4: string; exp_month: number; exp_year: number }): string {
+  const brand = card.brand === 'amex' ? 'Amex' : card.brand.charAt(0).toUpperCase() + card.brand.slice(1)
+  return `${brand} •••• ${card.last4} · ${String(card.exp_month).padStart(2, '0')}/${String(card.exp_year).slice(-2)}`
+}

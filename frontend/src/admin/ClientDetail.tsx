@@ -3,7 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { Badge, Card, Empty, ErrorState, Field, Loading, Modal } from '../components/ui'
 import { api, errorMessage } from '../lib/api'
-import { ago, fmtDate, fmtShort, money } from '../lib/format'
+import { ago, cardLabel, fmtDate, fmtShort, money } from '../lib/format'
 import { cap, PAYMENT_METHOD_LABELS } from '../lib/status'
 import { useToast } from '../lib/toast'
 import type { Service } from '../lib/types'
@@ -162,6 +162,7 @@ export default function ClientDetail() {
             <dt>Address</dt><dd style={{ whiteSpace: 'pre-line' }}>{c.address || '—'}</dd>
             <dt>Client since</dt><dd>{fmtDate(c.created_at)}</dd>
             <dt>Last sign-in</dt><dd>{c.last_login_at ? `${ago(c.last_login_at)}${c.last_login_ip ? ` · ${c.last_login_ip}` : ''}` : 'Never'}</dd>
+            <dt>Auto-pay</dt><dd>{c.card ? `${c.autopay ? 'On' : 'Off'} · ${cardLabel(c.card)}` : 'No saved card'}</dd>
             <dt>Emails</dt><dd>{Object.entries(c.prefs).filter(([, v]) => v).map(([k]) => ({ inv: 'invoices', svc: 'services', tick: 'tickets', renew: 'renewals', news: 'news' })[k]).join(', ') || 'none'}</dd>
           </dl>
           {c.admin_notes && (<><hr className="divider" /><span className="eyebrow">private notes</span><p className="muted" style={{ margin: 0, fontSize: 13, whiteSpace: 'pre-wrap' }}>{c.admin_notes}</p></>)}

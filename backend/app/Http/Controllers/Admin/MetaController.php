@@ -20,7 +20,7 @@ class MetaController extends Controller
             'service_types' => collect(ServiceType::cases())->map(fn ($c) => ['value' => $c->value, 'label' => $c->label(), 'icon' => $c->icon()]),
             'service_statuses' => collect(ServiceStatus::cases())->map(fn ($c) => ['value' => $c->value, 'label' => $c->label()]),
             'billing_cycles' => collect(BillingCycle::cases())->map(fn ($c) => ['value' => $c->value, 'label' => ucfirst(str_replace('_', '-', $c->value))]),
-            'payment_methods' => Payment::METHODS,
+            'payment_methods' => Payment::MANUAL_METHODS,
             'activity_kinds' => array_keys(Activity::KINDS),
             'defaults' => [
                 'tax_rate' => config('business.tax_rate'),

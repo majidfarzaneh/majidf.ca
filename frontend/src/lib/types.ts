@@ -2,6 +2,9 @@ export type Role = 'admin' | 'client'
 
 export interface Prefs { inv: boolean; svc: boolean; tick: boolean; renew: boolean; news: boolean }
 
+/** The client's saved card (display details only; the card itself stays in Stripe). */
+export interface SavedCard { brand: string; last4: string; exp_month: number; exp_year: number }
+
 export interface User {
   id: number
   name: string
@@ -12,6 +15,8 @@ export interface User {
   address: string | null
   initials: string
   prefs: Prefs
+  card: SavedCard | null
+  autopay: boolean
   is_active: boolean
   last_login_at: string | null
   created_at: string | null

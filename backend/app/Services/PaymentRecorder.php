@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Enums\InvoiceStatus;
 use App\Mail\AdminAlertMail;
+use App\Mail\InvoiceMail;
 use App\Mail\PaymentReceiptMail;
 use App\Models\Activity;
 use App\Models\Invoice;
@@ -66,11 +67,15 @@ class PaymentRecorder
                 Mail::to($payment->user)->queue(new PaymentReceiptMail($payment));
             }
 
-            if (in_array($payment->method, ['card', 'checkout'], true)) {
+            if (in_array($payment->method, ['card', 'checkout', 'autopay'], true)) {
                 AdminAlertMail::dispatch('payment', "Payment received · {$amount}", [
                     'Client' => $payment->user->company ?: $payment->user->name,
                     'Invoices' => $numbers,
-                    'Method' => $payment->method === 'card' ? 'Card (in portal)' : 'Stripe Checkout',
+                    'Method' => match ($payment->method) {
+                        'card' => 'Card (in portal)',
+                        'autopay' => 'Saved card (auto-pay)',
+                        default => 'Stripe Checkout',
+                    },
                 ], '/payments');
             }
         }
@@ -89,8 +94,27 @@ class PaymentRecorder
 
     public function failed(Payment $payment, ?string $note = null): void
     {
-        if ($payment->status === 'pending') {
-            $payment->update(['status' => 'failed', 'note' => $note]);
+        $payment = Payment::query()->findOrFail($payment->id);
+        if ($payment->status !== 'pending') {
+            return;
+        }
+        $payment->update(['status' => 'failed', 'note' => $note]);
+
+        // A failed auto-pay charge: the invoice stays unpaid, so the client pays it in the portal
+        // (normal reminders follow) and the admin hears about it.
+        if ($payment->method === 'autopay') {
+            $payment->load('invoices', 'user');
+            foreach ($payment->invoices as $invoice) {
+                Activity::log($payment->user_id, 'payment', "Auto-pay failed · {$invoice->number}", $invoice);
+                if ($payment->user->wants('inv')) {
+                    Mail::to($payment->user)->queue(new InvoiceMail($invoice, 'autopay_failed', $note));
+                }
+                AdminAlertMail::dispatch('payment', "Auto-pay failed · {$invoice->number} · ".Money::format($invoice->total_cents), [
+                    'Client' => $payment->user->company ?: $payment->user->name,
+                    'Card' => ucfirst((string) $payment->user->card_brand).' •••• '.$payment->user->card_last4,
+                    'Reason' => $note ?? 'Unknown',
+                ], '/invoices/'.$invoice->id);
+            }
         }
     }
 }

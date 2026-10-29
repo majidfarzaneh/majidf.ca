@@ -1,45 +1,17 @@
 import { Elements, PaymentElement, useElements, useStripe } from '@stripe/react-stripe-js'
-import { loadStripe, type Appearance, type Stripe } from '@stripe/stripe-js'
 import { useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { Modal } from '../components/ui'
 import { api, errorMessage } from '../lib/api'
-import { useMe } from '../lib/auth'
+import { ME_KEY, useMe } from '../lib/auth'
 import { money } from '../lib/format'
 import type { Invoice, Payment } from '../lib/types'
 import { P } from '../lib/sites'
+import { appearance, getStripe } from '../lib/stripe'
 import OfflinePay from './OfflinePay'
 import { portalKeys } from './queries'
 
 type Step = 'method' | 'card' | 'processing' | 'redirect' | 'done' | 'offline' | 'offline-done'
-
-const stripeCache = new Map<string, Promise<Stripe | null>>()
-function getStripe(key: string) {
-  if (!stripeCache.has(key)) stripeCache.set(key, loadStripe(key))
-  return stripeCache.get(key)!
-}
-
-const appearance: Appearance = {
-  theme: 'night',
-  variables: {
-    colorPrimary: '#0072ee',
-    colorBackground: '#09090b',
-    colorText: '#fafafa',
-    colorTextSecondary: '#a1a1aa',
-    colorTextPlaceholder: '#52525b',
-    colorDanger: '#e86466',
-    fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
-    borderRadius: '4px',
-    fontSizeBase: '14px',
-  },
-  rules: {
-    '.Input': { border: '1px solid #27272a', boxShadow: 'none' },
-    '.Input:focus': { borderColor: '#0072ee', boxShadow: '0 0 0 3px rgba(0,114,238,.22)' },
-    '.Label': { textTransform: 'uppercase', fontSize: '11px', letterSpacing: '.06em', color: '#71717a' },
-    '.Tab': { border: '1px solid #27272a', backgroundColor: '#09090b', boxShadow: 'none' },
-    '.Tab--selected': { borderColor: '#0072ee' },
-  },
-}
 
 /** Poll our API until the webhook (or a direct Stripe sync) marks the payment as succeeded. */
 export async function waitForPayment(id: number, tries = 15): Promise<Payment> {
@@ -95,6 +67,7 @@ export default function PayModal({ invoices, onClose }: { invoices: Invoice[]; o
     setStep('processing')
     const payment = await waitForPayment(paymentId).catch(() => null)
     await qc.invalidateQueries({ queryKey: portalKeys.all })
+    await qc.invalidateQueries({ queryKey: ME_KEY }) // a card saved with the payment shows on Profile
     if (payment?.status === 'failed') {
       setError(payment.note ?? 'The payment did not go through.')
       setIntent(null)
@@ -139,7 +112,7 @@ export default function PayModal({ invoices, onClose }: { invoices: Invoice[]; o
       {step === 'card' && (
         intent && me?.stripe.key ? (
           <Elements stripe={getStripe(me.stripe.key)} options={{ clientSecret: intent.secret, appearance }}>
-            <CardForm paymentId={intent.id} amount={money(total, true)} onBack={() => setStep('method')} onPaid={() => finished(intent.id)} />
+            <CardForm paymentId={intent.id} amount={money(total, true)} replacing={!!me.user.card} onBack={() => setStep('method')} onPaid={() => finished(intent.id)} />
           </Elements>
         ) : (
           <Busy text="Preparing secure payment…" />
@@ -196,9 +169,11 @@ function Busy({ text }: { text: string }) {
   )
 }
 
-function CardForm({ paymentId, amount, onBack, onPaid }: { paymentId: number; amount: string; onBack: () => void; onPaid: () => void }) {
+function CardForm({ paymentId, amount, replacing, onBack, onPaid }: { paymentId: number; amount: string; replacing: boolean; onBack: () => void; onPaid: () => void }) {
   const stripe = useStripe()
   const elements = useElements()
+  const { data: me } = useMe()
+  const [save, setSave] = useState(false)
   const [ready, setReady] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -208,6 +183,17 @@ function CardForm({ paymentId, amount, onBack, onPaid }: { paymentId: number; am
     if (!stripe || !elements) return
     setSubmitting(true)
     setError(null)
+    if (save) {
+      // Stripe must know before confirming that the card is kept for later charges.
+      try {
+        await api.post(`/portal/payments/${paymentId}/save-card`, { save: true })
+        await elements.fetchUpdates()
+      } catch (err) {
+        setError(errorMessage(err))
+        setSubmitting(false)
+        return
+      }
+    }
     const { error: err, paymentIntent } = await stripe.confirmPayment({
       elements,
       redirect: 'if_required',
@@ -225,6 +211,13 @@ function CardForm({ paymentId, amount, onBack, onPaid }: { paymentId: number; am
     <form onSubmit={submit} className="modal-body fade-up" style={{ animationDuration: '.3s' }}>
       <PaymentElement onReady={() => setReady(true)} options={{ layout: 'tabs' }} />
       {!ready && <div className="loading" style={{ padding: 24 }}><i className="fa-solid fa-circle-notch spin" />Loading secure form</div>}
+      <label className="checkbox" style={{ fontSize: 12, lineHeight: '18px' }}>
+        <input type="checkbox" checked={save} disabled={submitting} onChange={(e) => setSave(e.target.checked)} />
+        <span>
+          Save this card {replacing ? '(replaces your saved card) ' : ''}and pay renewals automatically.{' '}
+          <span className="dim">I authorize {me?.business.name ?? 'the business'} to charge it for my services' renewal invoices until I remove it in Profile.</span>
+        </span>
+      </label>
       {error && <div className="field-error"><i className="fa-solid fa-circle-exclamation" />{error}</div>}
       <button type="submit" className="btn btn-lg" disabled={!stripe || !ready || submitting}>
         {submitting ? <><i className="fa-solid fa-circle-notch spin" />Confirming</> : <><i className="fa-solid fa-lock" style={{ fontSize: 11 }} />Pay {amount}</>}

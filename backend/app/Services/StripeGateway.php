@@ -7,7 +7,10 @@ use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 use Stripe\Event;
+use Stripe\Exception\ApiErrorException;
+use Stripe\Exception\CardException;
 use Stripe\StripeClient;
 use Stripe\Webhook;
 
@@ -100,7 +103,10 @@ class StripeGateway
         } elseif ($payment->stripe_payment_intent_id) {
             $intent = $this->client()->paymentIntents->retrieve($payment->stripe_payment_intent_id);
             if ($intent->status === 'succeeded') {
-                return $this->recorder->succeeded($payment);
+                $payment = $this->recorder->succeeded($payment);
+                $this->keepCardFrom($payment, $intent->payment_method);
+
+                return $payment;
             }
         }
 
@@ -135,9 +141,165 @@ class StripeGateway
             'checkout.session.completed', 'checkout.session.async_payment_succeeded' => $object->payment_status === 'paid'
                 ? $this->recorder->succeeded($payment, ['stripe_payment_intent_id' => $object->payment_intent])
                 : null,
-            'payment_intent.succeeded' => $this->recorder->succeeded($payment, ['stripe_payment_intent_id' => $object->id]),
+            'payment_intent.succeeded' => $this->keepCardFrom(
+                $this->recorder->succeeded($payment, ['stripe_payment_intent_id' => $object->id]),
+                $object->payment_method ?? null,
+            ),
             'payment_intent.payment_failed' => $this->recorder->failed($payment, $object->last_payment_error->message ?? null),
         };
+    }
+
+    /**
+     * "Save this card for automatic payments" ticked in the card form: ask Stripe to keep the card
+     * for off-session use. Must happen before the browser confirms the payment.
+     */
+    public function saveCardOnPayment(Payment $payment, bool $save): void
+    {
+        abort_unless($payment->method === 'card' && $payment->status === 'pending' && $payment->stripe_payment_intent_id, 422, 'This payment can no longer be changed.');
+
+        $this->client()->paymentIntents->update($payment->stripe_payment_intent_id, [
+            'setup_future_usage' => $save ? 'off_session' : '',
+        ]);
+        $payment->update(['save_card' => $save]);
+    }
+
+    /** Start saving a card without paying anything (Profile → Payment method). */
+    public function createSetupIntent(User $user): string
+    {
+        return $this->client()->setupIntents->create([
+            'customer' => $this->customerId($user),
+            'payment_method_types' => ['card'],
+            'usage' => 'off_session',
+            'metadata' => ['user_id' => $user->id],
+        ])->client_secret;
+    }
+
+    /** The browser confirmed the SetupIntent: keep its card and turn auto-pay on (the client consented in the form). */
+    public function saveCardFromSetup(User $user, string $setupIntentId): User
+    {
+        $setup = $this->client()->setupIntents->retrieve($setupIntentId);
+        if ($setup->customer !== $user->stripe_customer_id || $setup->status !== 'succeeded' || ! $setup->payment_method) {
+            throw ValidationException::withMessages(['card' => 'The card could not be saved. Please try again.']);
+        }
+
+        return $this->rememberCard($user, $setup->payment_method);
+    }
+
+    /** Forget the saved card here and detach it in Stripe; auto-pay turns off. */
+    public function removeCard(User $user): User
+    {
+        if ($user->stripe_payment_method_id) {
+            try {
+                $this->client()->paymentMethods->detach($user->stripe_payment_method_id);
+            } catch (ApiErrorException $e) {
+                Log::warning('Stripe card detach failed', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
+        }
+
+        $user->forceFill([
+            'stripe_payment_method_id' => null, 'card_brand' => null, 'card_last4' => null,
+            'card_exp_month' => null, 'card_exp_year' => null, 'autopay' => false,
+        ])->save();
+
+        return $user;
+    }
+
+    /**
+     * Auto-pay: charge the client's saved card for an issued invoice, without them present.
+     * Succeeds, stays pending (Stripe still processing; the webhook finishes it) or fails with the reason.
+     */
+    public function chargeSavedCard(Invoice $invoice): Payment
+    {
+        $user = $invoice->user;
+        $payment = $this->recorder->pending($user, collect([$invoice]), 'autopay');
+
+        try {
+            $intent = $this->client()->paymentIntents->create([
+                'amount' => $payment->amount_cents,
+                'currency' => strtolower($payment->currency),
+                'customer' => $this->customerId($user),
+                'payment_method' => $user->stripe_payment_method_id,
+                'off_session' => true,
+                'confirm' => true,
+                'description' => $this->describe(collect([$invoice])).' · auto-pay',
+                'metadata' => ['payment_id' => $payment->id, 'invoices' => $invoice->number, 'autopay' => '1'],
+            ], ['idempotency_key' => 'autopay-'.$payment->id]);
+        } catch (CardException $e) {
+            if ($id = $e->getError()?->payment_intent?->id) {
+                $payment->update(['stripe_payment_intent_id' => $id]);
+            }
+            $this->recorder->failed($payment, $e->getStripeCode() === 'authentication_required'
+                ? 'Your bank asked to confirm this payment, so it could not be charged automatically.'
+                : ($e->getMessage() ?: 'Your card was declined.'));
+
+            return $payment->refresh();
+        } catch (ApiErrorException $e) {
+            Log::error('Auto-pay charge failed', ['invoice' => $invoice->number, 'error' => $e->getMessage()]);
+            $this->recorder->failed($payment, 'The automatic payment could not be processed.');
+
+            return $payment->refresh();
+        }
+
+        $payment->update(['stripe_payment_intent_id' => $intent->id]);
+
+        if ($intent->status === 'succeeded') {
+            return $this->recorder->succeeded($payment);
+        }
+        // "processing" finishes through the webhook; anything else needs the client.
+        if ($intent->status !== 'processing') {
+            $this->recorder->failed($payment, 'The automatic payment needs your confirmation.');
+        }
+
+        return $payment->refresh();
+    }
+
+    /** After a "save this card" payment succeeds, keep the card it used. */
+    private function keepCardFrom(Payment $payment, mixed $paymentMethod): Payment
+    {
+        $id = is_string($paymentMethod) ? $paymentMethod : ($paymentMethod->id ?? null);
+        if ($payment->save_card && $id && $payment->user->stripe_payment_method_id !== $id) {
+            try {
+                $this->rememberCard($payment->user, $id);
+            } catch (ApiErrorException $e) {
+                Log::warning('Could not keep card after payment', ['payment_id' => $payment->id, 'error' => $e->getMessage()]);
+            }
+        }
+
+        return $payment;
+    }
+
+    /** Store a card's display details, make it the customer's default and drop the card it replaces. */
+    private function rememberCard(User $user, string $paymentMethodId): User
+    {
+        $method = $this->client()->paymentMethods->retrieve($paymentMethodId);
+        if ($method->customer !== $user->stripe_customer_id || ! $method->card) {
+            throw ValidationException::withMessages(['card' => 'That card does not belong to this account.']);
+        }
+
+        $this->client()->customers->update($user->stripe_customer_id, [
+            'invoice_settings' => ['default_payment_method' => $method->id],
+        ]);
+
+        $previous = $user->stripe_payment_method_id;
+        $user->forceFill([
+            'stripe_payment_method_id' => $method->id,
+            'card_brand' => $method->card->brand,
+            'card_last4' => $method->card->last4,
+            'card_exp_month' => $method->card->exp_month,
+            'card_exp_year' => $method->card->exp_year,
+            'autopay' => true,
+            'autopay_consented_at' => now(),
+        ])->save();
+
+        if ($previous && $previous !== $method->id) {
+            try {
+                $this->client()->paymentMethods->detach($previous);
+            } catch (ApiErrorException $e) {
+                Log::warning('Could not detach replaced card', ['user_id' => $user->id, 'error' => $e->getMessage()]);
+            }
+        }
+
+        return $user;
     }
 
     private function customerId(User $user): string

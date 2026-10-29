@@ -6,6 +6,7 @@ import { ME_KEY, useMe } from '../lib/auth'
 import { ago, fmtTime } from '../lib/format'
 import { useToast } from '../lib/toast'
 import type { Me, Prefs, User } from '../lib/types'
+import PaymentMethod from './PaymentMethod'
 
 const NOTIFS: [keyof Prefs, string, string][] = [
   ['inv', 'New invoices', 'When an invoice is issued or due'],
@@ -67,6 +68,7 @@ export default function Profile() {
             </button>
           ))}
         </Card>
+        <PaymentMethod delay={0.12} />
         <Card delay={0.16} style={{ padding: 24, gap: 12 }}>
           <span className="card-title">Sign-in</span>
           <p className="muted" style={{ margin: 0, fontSize: 13, lineHeight: '20px' }}>Passwordless. A one-time code goes to your email each time you sign in.</p>

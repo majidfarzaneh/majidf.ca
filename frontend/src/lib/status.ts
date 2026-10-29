@@ -36,6 +36,7 @@ export const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).replace
 export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   card: 'Card (portal)',
   checkout: 'Stripe Checkout',
+  autopay: 'Saved card (auto-pay)',
   etransfer: 'Interac e-Transfer',
   bank: 'Bank transfer',
   cash: 'Cash',

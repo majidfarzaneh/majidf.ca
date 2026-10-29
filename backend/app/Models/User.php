@@ -12,7 +12,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 #[Fillable(['name', 'email', 'role', 'company', 'phone', 'address', 'notification_prefs', 'admin_notes', 'is_active'])]
-#[Hidden(['password', 'remember_token', 'admin_notes', 'stripe_customer_id'])]
+#[Hidden(['password', 'remember_token', 'admin_notes', 'stripe_customer_id', 'stripe_payment_method_id'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
@@ -29,6 +29,37 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'last_login_at' => 'datetime',
             'password' => 'hashed',
+            'autopay' => 'boolean',
+            'autopay_consented_at' => 'datetime',
+            'card_exp_month' => 'integer',
+            'card_exp_year' => 'integer',
+        ];
+    }
+
+    /** A saved card that auto-pay can charge (the card itself lives in Stripe). */
+    public function hasSavedCard(): bool
+    {
+        return filled($this->stripe_payment_method_id);
+    }
+
+    /** Charge the saved card for auto-invoiced renewals. */
+    public function autopayEnabled(): bool
+    {
+        return $this->autopay && $this->hasSavedCard();
+    }
+
+    /** What the portal and admin show about the saved card. */
+    public function savedCard(): ?array
+    {
+        if (! $this->hasSavedCard()) {
+            return null;
+        }
+
+        return [
+            'brand' => $this->card_brand,
+            'last4' => $this->card_last4,
+            'exp_month' => $this->card_exp_month,
+            'exp_year' => $this->card_exp_year,
         ];
     }
 

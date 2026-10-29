@@ -28,6 +28,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('payments/offline', [Portal\PaymentController::class, 'offline'])->middleware('throttle:10,1');
         Route::get('payments/{payment}', [Portal\PaymentController::class, 'show']);
         Route::get('payments/{payment}/receipt', [Portal\PaymentController::class, 'receipt']);
+        Route::post('payments/{payment}/save-card', [Portal\PaymentMethodController::class, 'saveOnPayment'])->middleware('throttle:20,1');
+        Route::post('payment-method/setup', [Portal\PaymentMethodController::class, 'setup'])->middleware('throttle:10,1');
+        Route::post('payment-method', [Portal\PaymentMethodController::class, 'store'])->middleware('throttle:10,1');
+        Route::put('payment-method/autopay', [Portal\PaymentMethodController::class, 'autopay']);
+        Route::delete('payment-method', [Portal\PaymentMethodController::class, 'destroy']);
         Route::get('tickets', [Portal\TicketController::class, 'index']);
         Route::post('tickets', [Portal\TicketController::class, 'store'])->middleware('throttle:20,1');
         Route::get('tickets/{number}', [Portal\TicketController::class, 'show'])->whereNumber('number');

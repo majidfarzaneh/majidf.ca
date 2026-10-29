@@ -105,7 +105,7 @@ class InvoiceController extends Controller
     {
         abort_unless($invoice->isOpen(), 422, 'Only unpaid invoices can be marked paid.');
         $data = $request->validate([
-            'method' => ['required', Rule::in(Payment::METHODS)],
+            'method' => ['required', Rule::in(Payment::MANUAL_METHODS)],
             'reference' => ['nullable', 'string', 'max:120'],
             'note' => ['nullable', 'string', 'max:1000'],
             'paid_on' => ['nullable', 'date', 'before_or_equal:today'],
