@@ -5,7 +5,7 @@ return [
     'name' => env('BUSINESS_NAME', 'Majid Farzaneh'),
     'owner_name' => env('BUSINESS_OWNER_NAME', 'Majid'),
     'email' => env('BUSINESS_EMAIL', 'majix.fa@gmail.com'),
-    'phone' => env('BUSINESS_PHONE', '647-271-4449'),
+    'phone' => env('BUSINESS_PHONE', '437-328-3301'),
     'address' => env('BUSINESS_ADDRESS', 'Toronto, ON, Canada'),
     'tax_number' => env('BUSINESS_TAX_NUMBER'),
 

@@ -5,7 +5,7 @@ import { loginPath } from '../lib/sites'
 import './landing.css'
 
 const EMAIL = 'majix.fa@gmail.com'
-const PHONE = '647-271-4449'
+const PHONE = '437-328-3301'
 const HERO = 'Full-stack engineer.'
 const TYPING_SPEED = 28
 const STACK = ['React', 'TypeScript', 'PHP', 'Laravel', 'Docker']
