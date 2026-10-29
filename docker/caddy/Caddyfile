@@ -1,0 +1,50 @@
+# Production: plain HTTP on 127.0.0.1:8094 behind the host nginx, which terminates TLS for majidf.ca,
+# panel. and admin. (and redirects www.). One React build serves all three (it picks the site from the
+# hostname); the API is proxied to php-fpm on 127.0.0.1:9094 on every host.
+{
+	admin off
+	auto_https off
+	servers {
+		# Keep nginx's X-Forwarded-Proto/For so Laravel sees https and the real client IP.
+		trusted_proxies static 127.0.0.1/32 ::1/128
+	}
+}
+
+http://:8094 {
+	bind 127.0.0.1
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+		-Server
+	}
+
+	@backend path /api/* /sanctum/* /up
+	handle @backend {
+		rewrite * /index.php?{query}
+		reverse_proxy 127.0.0.1:9094 {
+			transport fastcgi {
+				root /var/www/html/public
+				split .php
+			}
+		}
+	}
+
+	handle {
+		root * /srv
+		@assets path /assets/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		header /index.html Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+
+	log {
+		output stdout
+		format json
+	}
+}

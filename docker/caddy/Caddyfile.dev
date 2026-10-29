@@ -1,0 +1,25 @@
+# Development: one origin (majidf.local, panel. and admin. on host port 80) for the React dev server and the Laravel API,
+# so session cookies and CSRF work exactly as they do in production.
+{
+	admin off
+	auto_https off
+}
+
+:8080 {
+	encode gzip
+
+	@backend path /api/* /sanctum/* /up
+	handle @backend {
+		rewrite * /index.php?{query}
+		reverse_proxy app:9000 {
+			transport fastcgi {
+				root /var/www/html/public
+				split .php
+			}
+		}
+	}
+
+	handle {
+		reverse_proxy frontend:5173
+	}
+}

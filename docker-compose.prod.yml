@@ -1,0 +1,112 @@
+# Production stack for https://majidf.ca on 91.99.207.212 (panel. and admin. subdomains too).
+#
+#   deploy/deploy.sh does `pull` + `up -d`; GitHub Actions runs it on every push to main.
+#
+# Images are built by GitHub Actions and pushed to GHCR, tagged with the commit SHA
+# (IMAGE_TAG, written to .env by deploy.sh). Nothing is built on the server.
+#
+# Every service uses HOST networking and binds 127.0.0.1 only:
+#   web   (Caddy + SPA)  127.0.0.1:8094  ← the host nginx proxies the domains here and terminates TLS
+#   app   (php-fpm)      127.0.0.1:9094
+#   redis                127.0.0.1:6394  password-protected; sessions, cache and the queue
+#   mysql (8.4)          127.0.0.1:3307  (the host's own MySQL already has :3306)
+#
+# Laravel settings live in .env.production (mode 600, never committed). deploy.sh copies the
+# few values compose itself needs (MySQL/Redis credentials) into .env next to IMAGE_TAG.
+name: majidf
+
+x-logging: &logging
+  driver: json-file
+  options: { max-size: "10m", max-file: "5" }
+
+x-php: &php
+  image: ghcr.io/majidfarzaneh/majidf.ca/php:${IMAGE_TAG:-latest}
+  env_file: .env.production
+  network_mode: host
+  volumes:
+    - storage:/var/www/html/storage
+  restart: unless-stopped
+  logging: *logging
+
+services:
+  app:
+    <<: *php
+    environment:
+      CONTAINER_ROLE: app
+      RUN_MIGRATIONS: "true"
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_started }
+    mem_limit: 384m
+    healthcheck:
+      test: ["CMD-SHELL", "SCRIPT_NAME=/fpm-ping SCRIPT_FILENAME=/fpm-ping REQUEST_METHOD=GET cgi-fcgi -bind -connect 127.0.0.1:9094 | grep -q pong"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+
+  queue:
+    <<: *php
+    environment: { CONTAINER_ROLE: worker }
+    command: php artisan queue:work --tries=3 --backoff=60 --max-time=3600 --memory=128
+    stop_grace_period: 60s
+    depends_on:
+      app: { condition: service_healthy }
+    mem_limit: 192m
+
+  scheduler:
+    <<: *php
+    environment: { CONTAINER_ROLE: worker }
+    command: php artisan schedule:work
+    depends_on:
+      app: { condition: service_healthy }
+    mem_limit: 160m
+
+  web:
+    image: ghcr.io/majidfarzaneh/majidf.ca/web:${IMAGE_TAG:-latest}
+    network_mode: host
+    depends_on:
+      app: { condition: service_healthy }
+    restart: unless-stopped
+    mem_limit: 64m
+    logging: *logging
+
+  mysql:
+    image: mysql:8.4
+    network_mode: host
+    command: >-
+      --bind-address=127.0.0.1 --port=3307 --mysqlx=OFF
+      --innodb-buffer-pool-size=128M --performance-schema=OFF
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:?set DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME:?set DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -P 3307 -u$$MYSQL_USER -p$$MYSQL_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
+    restart: unless-stopped
+    mem_limit: 512m
+    logging: *logging
+
+  redis:
+    image: redis:7-alpine
+    network_mode: host
+    command: >-
+      redis-server --bind 127.0.0.1 --port 6394 --requirepass "${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}"
+      --maxmemory 64mb --maxmemory-policy noeviction --appendonly yes
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    mem_limit: 96m
+    logging: *logging
+
+volumes:
+  storage:
+  mysql_data:
+  redis_data:

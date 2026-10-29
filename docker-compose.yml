@@ -1,0 +1,113 @@
+# Local development.
+#   docker compose up -d          → http://majidf.local · http://panel.majidf.local · http://admin.majidf.local · http://localhost:8025 (Mailpit)
+#   docker compose --profile stripe up -d   → also forwards Stripe test webhooks to the API
+name: portfolio
+
+x-php: &php
+  build:
+    context: .
+    dockerfile: docker/php/Dockerfile
+    target: dev
+  image: portfolio-php:dev
+  volumes:
+    - ./backend:/var/www/html
+  env_file: ./backend/.env
+  depends_on:
+    mysql: { condition: service_healthy }
+    redis: { condition: service_healthy }
+  restart: unless-stopped
+
+services:
+  app:
+    <<: *php
+    environment:
+      CONTAINER_ROLE: app
+      RUN_MIGRATIONS: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "SCRIPT_NAME=/fpm-ping SCRIPT_FILENAME=/fpm-ping REQUEST_METHOD=GET cgi-fcgi -bind -connect 127.0.0.1:9000 | grep -q pong"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 60s
+
+  queue:
+    <<: *php
+    environment: { CONTAINER_ROLE: worker }
+    # queue:listen boots fresh code for every job, so edits apply without restarting the worker (prod uses queue:work).
+    command: php artisan queue:listen --tries=3 --backoff=30 --sleep=1
+    depends_on:
+      app: { condition: service_healthy }
+
+  scheduler:
+    <<: *php
+    environment: { CONTAINER_ROLE: worker }
+    command: php artisan schedule:work
+    depends_on:
+      app: { condition: service_healthy }
+
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "npm install --no-audit --no-fund && npm run dev -- --host 0.0.0.0 --port 5173"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    environment:
+      CHOKIDAR_USEPOLLING: "true"
+      VITE_HMR_PORT: ${APP_HOST_PORT:-80}
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2.10-alpine
+    ports:
+      - "${APP_HOST_PORT:-80}:8080"
+    volumes:
+      - ./docker/caddy/Caddyfile.dev:/etc/caddy/Caddyfile:ro
+    depends_on: [app, frontend]
+    restart: unless-stopped
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: portal
+      MYSQL_USER: portal
+      MYSQL_PASSWORD: portal
+      MYSQL_ROOT_PASSWORD: root
+    ports:
+      - "${MYSQL_HOST_PORT:-3316}:3306"   # for a local DB client
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uportal", "-pportal"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "${MAILPIT_HOST_PORT:-8025}:8025"
+    restart: unless-stopped
+
+  stripe:
+    image: stripe/stripe-cli:latest
+    profiles: [stripe]
+    # Uses STRIPE_SECRET from backend/.env. Copy the printed whsec_… into STRIPE_WEBHOOK_SECRET.
+    entrypoint: ["sh", "-c", "STRIPE_API_KEY=$$STRIPE_SECRET exec stripe listen --forward-to http://caddy:8080/api/stripe/webhook --events payment_intent.succeeded,payment_intent.payment_failed,checkout.session.completed,checkout.session.async_payment_succeeded"]
+    env_file: ./backend/.env
+    depends_on: [caddy]
+
+volumes:
+  mysql_data:
+  redis_data:
+  frontend_node_modules:

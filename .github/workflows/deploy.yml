@@ -1,0 +1,121 @@
+# Tests every push and pull request. On main it also builds both images, pushes them to GHCR
+# tagged with the commit SHA, and deploys that commit to https://majidf.ca (91.99.207.212).
+#
+# Secrets: DEPLOY_SSH_KEY (private key whose authorized_keys entry is forced to
+# deploy/ci-deploy.sh) and DEPLOY_KNOWN_HOSTS (ssh-keyscan of the server).
+name: CI / Deploy
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Never cancel a deploy halfway; superseded test runs on branches can go.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+env:
+  REGISTRY: ghcr.io/majidfarzaneh/majidf.ca
+
+jobs:
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: pdo_sqlite, pdo_mysql, bcmath, intl, gd, zip, redis
+          coverage: none
+      - uses: actions/cache@v4
+        with:
+          path: backend/vendor
+          key: composer-${{ hashFiles('backend/composer.lock') }}
+          restore-keys: composer-
+      - run: composer install --no-interaction --prefer-dist --no-progress
+      - run: cp .env.example .env && php artisan key:generate
+      - run: php artisan test
+
+  frontend:
+    name: Frontend checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npx tsc -b
+      - run: npx oxlint
+
+  images:
+    name: Build ${{ matrix.image }} image
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: [backend, frontend]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - image: php
+            dockerfile: docker/php/Dockerfile
+            target: prod
+          - image: web
+            dockerfile: docker/caddy/Dockerfile
+            target: ''
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          target: ${{ matrix.target }}
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ matrix.image }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ matrix.image }}:latest
+          # Links the package to this repo, so the workflow token can pull it on the server.
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=${{ matrix.image }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.image }}
+
+  deploy:
+    name: Deploy to majidf.ca
+    needs: images
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://majidf.ca
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: SSH key
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy
+          printf '%s\n' "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/deploy
+      - name: Deploy ${{ github.sha }}
+        # The server's forced command (deploy/ci-deploy.sh) reads "deploy <sha>" and the GHCR token on stdin.
+        run: |
+          printf '%s' "${{ secrets.GITHUB_TOKEN }}" \
+            | ssh -i ~/.ssh/deploy -o IdentitiesOnly=yes root@91.99.207.212 "deploy ${{ github.sha }}"

@@ -1,0 +1,70 @@
+.landing {
+  position: relative; min-height: 100vh; display: flex; flex-direction: column; gap: 24px;
+  padding: 24px clamp(20px, 4vw, 48px) 28px; background: var(--bg); color: var(--fg); overflow: hidden;
+}
+.landing-grid {
+  mask-image: radial-gradient(ellipse 70% 70% at 50% 40%, #000 30%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse 70% 70% at 50% 40%, #000 30%, transparent 100%);
+}
+.landing-head { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.landing-status { display: inline-flex; align-items: center; gap: 10px; }
+.landing-login {
+  display: inline-flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 4px; border: 1px solid var(--border);
+  background: transparent; color: var(--fg); font-family: var(--font-mono); font-size: 12px; transition: all 0.15s linear;
+}
+.landing-login i { font-size: 11px; color: var(--fg-3); }
+.landing-login:hover { border-color: var(--brand); background: var(--surface-2); color: var(--fg); }
+.landing-main {
+  position: relative; flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: clamp(32px, 5vw, 72px); align-items: center;
+}
+.landing-hero { display: flex; flex-direction: column; gap: 22px; max-width: 560px; }
+.landing-name { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: clamp(42px, 6vw, 76px); line-height: 1; letter-spacing: -0.025em; }
+.landing-typed {
+  font-family: var(--font-display); font-weight: 600; font-size: clamp(20px, 2.4vw, 28px); line-height: 1.2; color: var(--fg-2);
+  min-height: 1.2em; display: flex; align-items: center;
+}
+.landing-typed .caret { display: inline-block; width: 3px; height: 1em; margin-left: 3px; background: var(--brand); animation: blink 1s steps(1) infinite; }
+.landing-lede { margin: 0; font-size: 16px; line-height: 26px; color: var(--fg-2); max-width: 440px; text-wrap: pretty; }
+.landing-contact {
+  display: inline-flex; align-items: center; gap: 8px; padding: 11px 16px; border-radius: 4px; border: 1px solid var(--border);
+  background: transparent; color: var(--fg); font-family: var(--font-mono); font-size: 13px; transition: all 0.15s linear;
+}
+.landing-contact i { font-size: 12px; color: var(--fg-3); }
+.landing-contact:hover { background: var(--surface-2); border-color: var(--border-strong); color: var(--fg); }
+
+.landing-editor-wrap { display: flex; justify-content: center; min-width: 0; }
+.landing-editor {
+  width: 100%; max-width: 560px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
+  box-shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.7);
+}
+.editor-bar { display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-bottom: 1px solid var(--border); background: var(--bar); }
+.editor-bar .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--border-strong); }
+.editor-tab {
+  display: flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 4px; background: var(--surface-2); border: 1px solid var(--border);
+  font-family: var(--font-mono); font-size: 11px;
+}
+.editor-code { padding: 18px 16px 16px 10px; font-family: var(--font-mono); font-size: 13px; line-height: 22px; overflow: hidden; }
+.editor-line { display: flex; min-height: 22px; }
+.editor-gutter { width: 34px; flex: none; text-align: right; padding-right: 14px; color: var(--border-strong); user-select: none; }
+.editor-cursor { display: inline-block; width: 7px; height: 15px; margin-left: 1px; background: var(--lime); animation: blink 1s steps(1) infinite; }
+.editor-foot {
+  position: relative; display: flex; align-items: center; justify-content: space-between; padding: 6px 14px; border-top: 1px solid var(--border);
+  background: var(--bar); font-family: var(--font-mono); font-size: 11px; color: var(--fg-3);
+}
+.editor-progress { position: absolute; left: 0; top: -1px; height: 1px; background: var(--lime); transition: width 0.2s linear; }
+
+.landing-foot { position: relative; display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 24px 40px; }
+.landing-stat { display: flex; flex-direction: column; gap: 4px; }
+.landing-chip {
+  padding: 5px 10px; border: 1px solid var(--border); border-radius: 4px; font-family: var(--font-mono); font-size: 12px; color: var(--fg-2);
+  transition: all 0.15s linear; cursor: default;
+}
+.landing-chip:hover { border-color: var(--brand); color: var(--fg); }
+
+@media (max-width: 720px) {
+  .landing-status { display: none; }
+  .editor-code { font-size: 11px; line-height: 20px; }
+  .editor-line { min-height: 20px; }
+  .editor-gutter { width: 26px; padding-right: 10px; }
+}

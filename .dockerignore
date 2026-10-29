@@ -1,0 +1,13 @@
+.git
+**/.DS_Store
+**/node_modules
+frontend/dist
+backend/vendor
+backend/.env
+backend/storage/logs/*
+backend/storage/framework/*/*
+backend/bootstrap/cache/*.php
+backend/tests
+.env
+.env.production
+Majid Farzaneh - *.html
