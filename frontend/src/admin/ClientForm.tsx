@@ -4,11 +4,13 @@ import { Field, Modal } from '../components/ui'
 import { api, ApiError } from '../lib/api'
 import { useToast } from '../lib/toast'
 import type { User } from '../lib/types'
-import { adminKeys } from './queries'
+import { adminKeys, useMeta } from './queries'
+import TaxField from './TaxField'
 
 export default function ClientForm({ client, onClose, onSaved }: { client?: User; onClose: () => void; onSaved?: (u: User) => void }) {
   const qc = useQueryClient()
   const toast = useToast()
+  const { data: meta } = useMeta()
   const [f, setF] = useState({
     name: client?.name ?? '',
     email: client?.email ?? '',
@@ -18,10 +20,15 @@ export default function ClientForm({ client, onClose, onSaved }: { client?: User
     admin_notes: client?.admin_notes ?? '',
     is_active: client?.is_active ?? true,
     send_invite: !client,
+    tax_rate: client?.tax_rate != null ? String(client.tax_rate) : '',
+    tax_label: client?.tax_label ?? '',
   })
 
   const save = useMutation({
-    mutationFn: () => (client ? api.put<{ data: User }>(`/admin/clients/${client.id}`, f) : api.post<{ data: User }>('/admin/clients', f)),
+    mutationFn: () => {
+      const body = { ...f, tax_rate: f.tax_rate === '' ? null : f.tax_rate, tax_label: f.tax_label || null }
+      return client ? api.put<{ data: User }>(`/admin/clients/${client.id}`, body) : api.post<{ data: User }>('/admin/clients', body)
+    },
     onSuccess: (res) => {
       qc.invalidateQueries({ queryKey: adminKeys.all })
       toast.ok(client ? 'Client updated' : f.send_invite ? `Client added · invite sent to ${res.data.email}` : 'Client added')
@@ -45,6 +52,8 @@ export default function ClientForm({ client, onClose, onSaved }: { client?: User
             <Field label="phone" error={err('phone')}><input className="input" value={f.phone} onChange={set('phone')} /></Field>
           </div>
           <Field label="billing address" error={err('address')} hint="Printed on invoices."><textarea className="input" rows={2} value={f.address} onChange={set('address')} /></Field>
+          <TaxField value={f} onChange={(v) => setF({ ...f, ...v })} error={err('tax_rate')}
+            inheritName="Business default" inherited={meta && { rate: meta.defaults.tax_rate, label: meta.defaults.tax_label }} />
           <Field label="private notes" error={err('admin_notes')} hint="Only you can see these."><textarea className="input" rows={3} value={f.admin_notes} onChange={set('admin_notes')} /></Field>
           <div className="row-wrap" style={{ gap: 20 }}>
             {client && <label className="checkbox"><input type="checkbox" checked={f.is_active} onChange={(e) => setF({ ...f, is_active: e.target.checked })} />Can sign in</label>}

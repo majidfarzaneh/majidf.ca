@@ -13,6 +13,7 @@ use App\Models\Service;
 use App\Services\RenewalInvoicer;
 use App\Services\UptimeReport;
 use App\Support\Money;
+use App\Support\Tax;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -115,7 +116,9 @@ class ServiceController extends Controller
             'renews_at' => ['nullable', 'date'],
             'monitor_url' => ['nullable', 'url:http,https', 'max:255'],
             'sort' => ['nullable', 'integer', 'min:0'],
+            ...Tax::rules(),
         ]);
+        $data = Tax::normalize($data);
 
         if (array_key_exists('price', $data)) {
             $data['price_cents'] = $data['price'] === null ? null : Money::toCents($data['price']);

@@ -29,9 +29,10 @@ function Editor({ invoice }: { invoice?: Invoice }) {
   const qc = useQueryClient()
   const { data: meta } = useMeta()
   const { data: clients } = useClients()
+  const preselected = Number(params.get('client')) || 0 // "New invoice" from a client's page
 
   const [f, setF] = useState({
-    user_id: invoice?.user_id ?? (Number(params.get('client')) || 0),
+    user_id: invoice?.user_id ?? preselected,
     description: invoice?.description ?? '',
     issued_at: invoice?.issued_at ?? todayIso(),
     due_at: invoice?.due_at ?? '',
@@ -47,17 +48,24 @@ function Editor({ invoice }: { invoice?: Invoice }) {
   )
   const [sendEmail, setSendEmail] = useState(true)
 
-  // Fill defaults from settings once they load.
+  // Fill defaults from settings once they load; tax comes from the client when one is preselected.
   useEffect(() => {
-    if (!meta || invoice) return
+    if (!meta || invoice || (preselected && !clients)) return
+    const tax = clients?.find((c) => c.id === preselected)?.tax ?? { rate: meta.defaults.tax_rate, label: meta.defaults.tax_label }
     setF((cur) => ({
       ...cur,
-      tax_rate: cur.tax_rate || String(meta.defaults.tax_rate),
-      tax_label: cur.tax_label || meta.defaults.tax_label,
+      tax_rate: cur.tax_rate || String(tax.rate),
+      tax_label: cur.tax_label || tax.label,
       due_at: cur.due_at || todayIso(meta.defaults.payment_terms_days),
       grace_days: cur.grace_days || String(meta.defaults.grace_days),
     }))
-  }, [meta, invoice])
+  }, [meta, invoice, clients, preselected])
+
+  // A new invoice takes the chosen client's tax (their own setting, or the business default).
+  const pickClient = (id: number) => {
+    const tax = clients?.find((c) => c.id === id)?.tax
+    setF({ ...f, user_id: id, ...(tax ? { tax_rate: String(tax.rate), tax_label: tax.label } : {}) })
+  }
 
   const { data: services } = useAdminServices({ user_id: f.user_id || undefined })
   const clientServices = f.user_id ? (services ?? []).filter((s) => s.price_cents) : []
@@ -109,7 +117,7 @@ function Editor({ invoice }: { invoice?: Invoice }) {
         </div>
         <div className="form-grid">
           <Field label="client" error={err('user_id')}>
-            <select className="input" required value={f.user_id || ''} disabled={!!invoice} onChange={(e) => setF({ ...f, user_id: Number(e.target.value) })}>
+            <select className="input" required value={f.user_id || ''} disabled={!!invoice} onChange={(e) => pickClient(Number(e.target.value))}>
               <option value="" disabled>Choose a client</option>
               {clients?.map((c) => <option key={c.id} value={c.id}>{clientLabel(c)}{c.company ? ` (${c.name})` : ''}</option>)}
             </select>

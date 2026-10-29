@@ -15,6 +15,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 #[Fillable([
     'user_id', 'name', 'type', 'status', 'detail', 'meta', 'price_cents', 'billing_cycle', 'auto_invoice',
     'progress', 'progress_label', 'hours_total', 'hours_used', 'started_at', 'renews_at', 'monitor_url', 'sort',
+    'tax_rate', 'tax_label',
 ])]
 class Service extends Model
 {
@@ -27,6 +28,7 @@ class Service extends Model
             'status' => ServiceStatus::class,
             'billing_cycle' => BillingCycle::class,
             'auto_invoice' => 'boolean',
+            'tax_rate' => 'float',
             'progress' => 'float',
             'hours_total' => 'float',
             'hours_used' => 'float',

@@ -16,6 +16,7 @@ use App\Http\Resources\UserResource;
 use App\Mail\WelcomeMail;
 use App\Models\User;
 use App\Services\OfflinePayments;
+use App\Support\Tax;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -111,9 +112,10 @@ class ClientController extends Controller
             'address' => ['nullable', 'string', 'max:500'],
             'admin_notes' => ['nullable', 'string', 'max:5000'],
             'is_active' => ['sometimes', 'boolean'],
+            ...Tax::rules(),
         ]);
         $data['email'] = mb_strtolower($data['email']);
 
-        return $data;
+        return Tax::normalize($data);
     }
 }

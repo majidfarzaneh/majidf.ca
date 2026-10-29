@@ -8,6 +8,7 @@ use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Service;
 use App\Support\Money;
+use App\Support\Tax;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -51,12 +52,14 @@ class RenewalInvoicer
                 throw ValidationException::withMessages(['renewal' => $reason]);
             }
 
+            $tax = Tax::for($service->user, $service);
             $start = $service->renews_at;
             $next = $service->billing_cycle->advance($start);
             $invoice = $this->invoices->save(new Invoice, [
                 'user_id' => $service->user_id,
                 'description' => "{$service->name} · {$start->format('M Y')}",
-                'tax_rate' => config('business.tax_rate'),
+                'tax_rate' => $tax['rate'],
+                'tax_label' => $tax['label'],
                 'issued_at' => today(),
                 'due_at' => today()->addDays(config('business.payment_terms_days')),
             ], [[

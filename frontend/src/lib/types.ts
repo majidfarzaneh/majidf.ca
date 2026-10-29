@@ -5,6 +5,9 @@ export interface Prefs { inv: boolean; svc: boolean; tick: boolean; renew: boole
 /** The client's saved card (display details only; the card itself stays in Stripe). */
 export interface SavedCard { brand: string; last4: string; exp_month: number; exp_year: number }
 
+/** The tax invoices get, and where it comes from (service override → client → business default). */
+export interface EffectiveTax { rate: number; label: string; source: 'service' | 'client' | 'default' }
+
 export interface User {
   id: number
   name: string
@@ -22,6 +25,9 @@ export interface User {
   created_at: string | null
   // admin-only
   admin_notes?: string | null
+  tax_rate?: number | null
+  tax_label?: string | null
+  tax?: EffectiveTax
   last_login_ip?: string | null
   services_count?: number | null
   open_tickets_count?: number | null
@@ -74,6 +80,9 @@ export interface Service {
   user_id?: number
   user?: User
   auto_invoice?: boolean
+  tax_rate?: number | null
+  tax_label?: string | null
+  tax?: EffectiveTax
   /** The period "Invoice renewal" would bill now, or why it can't (admin only). */
   renewal?: { from: string; to: string } | { blocked: string }
   monitor_url?: string | null

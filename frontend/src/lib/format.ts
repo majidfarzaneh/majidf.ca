@@ -108,3 +108,8 @@ export function cardLabel(card: { brand: string; last4: string; exp_month: numbe
   const brand = card.brand === 'amex' ? 'Amex' : card.brand.charAt(0).toUpperCase() + card.brand.slice(1)
   return `${brand} •••• ${card.last4} · ${String(card.exp_month).padStart(2, '0')}/${String(card.exp_year).slice(-2)}`
 }
+
+/** "HST 13%", or "No tax". */
+export function taxText(t: { rate: number; label: string }): string {
+  return t.rate > 0 ? `${t.label} ${t.rate}%` : 'No tax'
+}

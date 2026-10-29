@@ -3,11 +3,12 @@ import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
 import { ConfirmButton, Field, Modal } from '../components/ui'
 import { api, ApiError, errorMessage } from '../lib/api'
-import { cardLabel, fmtDate } from '../lib/format'
+import { cardLabel, fmtDate, taxText } from '../lib/format'
 import { A } from '../lib/sites'
 import { useToast } from '../lib/toast'
 import type { Service } from '../lib/types'
 import { adminKeys, clientLabel, useClients, useMeta } from './queries'
+import TaxField from './TaxField'
 
 const RECURRING = ['monthly', 'quarterly', 'yearly']
 
@@ -34,6 +35,8 @@ export default function ServiceForm({ service, userId, onClose }: { service?: Se
     renews_at: service?.renews_at ?? '',
     monitor_url: service?.monitor_url ?? '',
     sort: service?.sort ?? 0,
+    tax_rate: service?.tax_rate != null ? String(service.tax_rate) : '',
+    tax_label: service?.tax_label ?? '',
   })
   const [notify, setNotify] = useState(true)
 
@@ -45,6 +48,7 @@ export default function ServiceForm({ service, userId, onClose }: { service?: Se
       price: nullable(f.price), billing_cycle: nullable(f.billing_cycle), progress: nullable(f.progress),
       hours_total: nullable(f.hours_total), hours_used: nullable(f.hours_used), started_at: nullable(f.started_at),
       renews_at: nullable(f.renews_at), monitor_url: nullable(f.monitor_url),
+      tax_rate: nullable(f.tax_rate), tax_label: f.tax_rate === '' ? null : nullable(f.tax_label),
     }
   }
 
@@ -65,6 +69,7 @@ export default function ServiceForm({ service, userId, onClose }: { service?: Se
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value })
   const submit = (e: FormEvent) => { e.preventDefault(); save.mutate() }
   const recurring = RECURRING.includes(f.billing_cycle)
+  const owner = service?.user ?? clients?.find((c) => c.id === f.user_id)
 
   return (
     <Modal wide title={service ? 'Edit service' : 'Add service'} eyebrow={service ? clientLabel(service.user) : 'services'} onClose={onClose} busy={save.isPending}>
@@ -107,6 +112,8 @@ export default function ServiceForm({ service, userId, onClose }: { service?: Se
             Auto-invoice on each renewal date (issues and emails the invoice, then moves the date forward)
           </label>
           {err('auto_invoice') && <div className="field-error">{err('auto_invoice')}</div>}
+          <TaxField value={f} onChange={(v) => setF({ ...f, ...v })} error={err('tax_rate')}
+            inheritName="Same as client" inherited={owner?.tax ?? (meta && { rate: meta.defaults.tax_rate, label: meta.defaults.tax_label })} />
           {service?.renewal && <RenewalInvoice service={service} onDone={onClose} />}
           <hr className="divider" />
           <div className="form-grid">
@@ -170,7 +177,7 @@ function RenewalInvoice({ service, onDone }: { service: Service; onDone: () => v
       ) : (
         <>
           <span style={{ fontSize: 13 }}>
-            Bill <b>{fmtDate(renewal.from)} – {fmtDate(renewal.to)}</b> at {service.price_label} now. The renewal date then moves to the next cycle, so it isn't billed twice.
+            Bill <b>{fmtDate(renewal.from)} – {fmtDate(renewal.to)}</b> at {service.price_label}{service.tax && (service.tax.rate > 0 ? ` + ${taxText(service.tax)}` : ' · no tax')} now. The renewal date then moves to the next cycle, so it isn't billed twice.
             {card && <span className="dim"> Auto-pay is on: sending charges {cardLabel(card)}.</span>}
           </span>
           <div className="row" style={{ gap: 8 }}>

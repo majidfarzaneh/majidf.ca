@@ -4,6 +4,7 @@ namespace App\Http\Resources;
 
 use App\Models\Service;
 use App\Services\RenewalInvoicer;
+use App\Support\Tax;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -38,6 +39,10 @@ class ServiceResource extends JsonResource
                 'user_id' => $this->user_id,
                 'user' => new UserResource($this->whenLoaded('user')),
                 'auto_invoice' => $this->auto_invoice,
+                // Own setting (null = same as the client) and what its renewal invoices get.
+                'tax_rate' => $this->tax_rate,
+                'tax_label' => $this->tax_label,
+                'tax' => Tax::for($this->user, $this->resource),
                 // The period "Invoice renewal" would bill now, or why it can't.
                 'renewal' => $this->renewalPreview(),
                 'monitor_url' => $this->monitor_url,
