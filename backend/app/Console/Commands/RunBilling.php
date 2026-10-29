@@ -8,7 +8,7 @@ use App\Models\Invoice;
 use App\Models\LoginCode;
 use App\Models\Service;
 use App\Services\InvoiceManager;
-use App\Services\StripeGateway;
+use App\Services\RenewalInvoicer;
 use App\Support\Money;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -19,9 +19,9 @@ use Illuminate\Support\Facades\Mail;
 #[Description('Daily: issue recurring invoices, send renewal and invoice reminders, prune expired sign-in codes')]
 class RunBilling extends Command
 {
-    public function handle(InvoiceManager $invoices, StripeGateway $stripe): void
+    public function handle(InvoiceManager $invoices, RenewalInvoicer $renewals): void
     {
-        $this->recurringInvoices($invoices, $stripe);
+        $this->recurringInvoices($renewals);
         $this->renewalReminders();
         $this->invoiceReminders($invoices);
 
@@ -29,43 +29,25 @@ class RunBilling extends Command
     }
 
     /**
-     * Services with auto-invoicing get an invoice on their renewal date, then roll forward one cycle.
-     * Clients with auto-pay are charged on their saved card instead of being emailed the invoice:
-     * success sends the receipt; a decline emails the invoice with "auto-pay failed" (PaymentRecorder).
+     * Services with auto-invoicing get an invoice on their renewal date, then roll forward one cycle
+     * (RenewalInvoicer). Clients with auto-pay are charged on their saved card instead of being emailed.
      */
-    private function recurringInvoices(InvoiceManager $invoices, StripeGateway $stripe): void
+    private function recurringInvoices(RenewalInvoicer $renewals): void
     {
-        $due = Service::query()->with('user')->where('auto_invoice', true)
+        $due = Service::query()->where('auto_invoice', true)
             ->where('status', ServiceStatus::Active)
             ->whereNotNull('price_cents')->whereDate('renews_at', '<=', today())->get();
 
         foreach ($due as $service) {
-            if (! $service->billing_cycle?->isRecurring()) {
+            if ($renewals->blocker($service)) {
                 continue;
             }
-            $period = $service->renews_at->format('M Y');
-            $invoice = $invoices->save(new Invoice, [
-                'user_id' => $service->user_id,
-                'description' => "{$service->name} · {$period}",
-                'tax_rate' => config('business.tax_rate'),
-                'issued_at' => today(),
-                'due_at' => today()->addDays(config('business.payment_terms_days')),
-            ], [[
-                'service_id' => $service->id,
-                'description' => "{$service->type->label()} · {$service->name} ({$period} – {$service->billing_cycle->advance($service->renews_at)->subDay()->format('M j, Y')})",
-                'quantity' => 1,
-                'unit_price' => $service->price_cents / 100,
-            ]]);
-            $autopay = $service->user->autopayEnabled() && $stripe->enabled();
-            $invoices->send($invoice, email: ! $autopay);
-            if ($autopay) {
-                $payment = $stripe->chargeSavedCard($invoice);
-                $this->line("Auto-pay {$invoice->number}: {$payment->status}");
+            if (! $issued = $renewals->issue($service, onlyIfDue: true)) {
+                continue;
             }
-
-            $service->update(['renews_at' => $service->billing_cycle->advance($service->renews_at)]);
-            $service->forceFill(['renewal_reminded_at' => null])->save();
-            $this->line("Issued {$invoice->number} for {$service->name} (".Money::format($invoice->total_cents).')');
+            ['invoice' => $invoice, 'payment' => $payment] = $issued;
+            $this->line("Issued {$invoice->number} for {$service->name} (".Money::format($invoice->total_cents).')'
+                .($payment ? " · auto-pay {$payment->status}" : ''));
         }
     }
 

@@ -10,6 +10,7 @@ use App\Http\Resources\ServiceResource;
 use App\Mail\ServiceAddedMail;
 use App\Models\Activity;
 use App\Models\Service;
+use App\Services\RenewalInvoicer;
 use App\Services\UptimeReport;
 use App\Support\Money;
 use Illuminate\Http\JsonResponse;
@@ -65,6 +66,26 @@ class ServiceController extends Controller
         }
 
         return new ServiceResource($service->load('user'));
+    }
+
+    /**
+     * Invoice the next renewal period now instead of waiting for the renewal date. Rolls the renewal
+     * date forward one cycle, so the daily job won't bill the same period again.
+     */
+    public function invoiceRenewal(Request $request, Service $service, RenewalInvoicer $renewals): JsonResponse
+    {
+        $send = $request->validate(['send' => ['boolean']])['send'] ?? true;
+        if ($reason = $renewals->blocker($service)) {
+            throw ValidationException::withMessages(['renewal' => $reason]);
+        }
+
+        ['invoice' => $invoice, 'payment' => $payment] = $renewals->issue($service, $send);
+
+        return response()->json([
+            'invoice' => ['id' => $invoice->id, 'number' => $invoice->number, 'status' => $invoice->status->value],
+            'autopay' => $payment?->status, // succeeded, pending or failed when the saved card was charged
+            'service' => new ServiceResource($service->refresh()->load('user')),
+        ], 201);
     }
 
     public function destroy(Service $service): JsonResponse

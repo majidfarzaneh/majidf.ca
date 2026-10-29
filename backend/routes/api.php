@@ -50,6 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('clients/{client}/invite', [Admin\ClientController::class, 'invite']);
 
         Route::apiResource('services', Admin\ServiceController::class);
+        Route::post('services/{service}/renewal-invoice', [Admin\ServiceController::class, 'invoiceRenewal']);
 
         Route::apiResource('invoices', Admin\InvoiceController::class);
         Route::post('invoices/{invoice}/send', [Admin\InvoiceController::class, 'send']);

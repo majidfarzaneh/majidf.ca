@@ -97,6 +97,21 @@ class AutopayTest extends TestCase
         Mail::assertNotQueued(InvoiceMail::class);
     }
 
+    public function test_admin_renewal_invoice_charges_an_auto_pay_client(): void
+    {
+        $this->withSavedCard();
+        $service = $this->renewingService();
+        $service->update(['auto_invoice' => false, 'renews_at' => today()->addDays(10)]);
+        $this->stripe->paymentIntents->shouldReceive('create')->once()
+            ->andReturn(PaymentIntent::constructFrom(['id' => 'pi_now', 'status' => 'succeeded']));
+
+        $this->actingAs(User::factory()->admin()->create())->postJson("/api/admin/services/{$service->id}/renewal-invoice")
+            ->assertCreated()->assertJsonPath('autopay', 'succeeded')->assertJsonPath('invoice.status', 'paid');
+
+        Mail::assertQueued(PaymentReceiptMail::class, 1);
+        Mail::assertNotQueued(InvoiceMail::class);
+    }
+
     public function test_declined_card_leaves_the_invoice_to_pay_and_tells_everyone(): void
     {
         $this->withSavedCard();

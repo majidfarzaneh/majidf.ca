@@ -74,6 +74,8 @@ export interface Service {
   user_id?: number
   user?: User
   auto_invoice?: boolean
+  /** The period "Invoice renewal" would bill now, or why it can't (admin only). */
+  renewal?: { from: string; to: string } | { blocked: string }
   monitor_url?: string | null
   raw_progress?: number | null
   sort?: number
