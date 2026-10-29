@@ -1,4 +1,5 @@
-import { useEffect, type CSSProperties, type ReactNode } from 'react'
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router'
 import { statusColors } from '../lib/status'
 import type { Uptime } from '../lib/types'
@@ -136,5 +137,98 @@ export function Kpi({ label, value, sub, delay }: { label: string; value: ReactN
       <span className="big-num">{value}</span>
       {sub && <span className="kpi-sub">{sub}</span>}
     </Card>
+  )
+}
+
+/**
+ * A button that asks "are you sure?" in a small popover anchored to it, instead of the browser's
+ * confirm(). Rendered in a portal (so a scrolling modal can't clip it), flips above the button when
+ * there's no room below, and keeps Escape / outside clicks from also closing a surrounding modal.
+ */
+export function ConfirmButton({ children, className = 'btn', disabled, title, message, confirmLabel, danger, onConfirm }: {
+  children: ReactNode
+  className?: string
+  disabled?: boolean
+  title: ReactNode
+  message?: ReactNode
+  confirmLabel: string
+  danger?: boolean
+  onConfirm: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const trigger = useRef<HTMLButtonElement>(null)
+  const pop = useRef<HTMLDivElement>(null)
+  const titleId = useId()
+
+  const close = useCallback(() => {
+    setOpen(false)
+    trigger.current?.focus()
+  }, [])
+
+  // Position next to the trigger (written straight to the DOM, so no re-render), and keep it there while scrolling.
+  useLayoutEffect(() => {
+    if (!open) return
+    const place = () => {
+      const t = trigger.current?.getBoundingClientRect()
+      const p = pop.current
+      if (!t || !p) return
+      const width = Math.min(320, window.innerWidth - 32)
+      const below = t.bottom + 8 + p.offsetHeight <= window.innerHeight - 16
+      p.style.width = `${width}px`
+      p.style.left = `${Math.max(16, Math.min(t.left, window.innerWidth - width - 16))}px`
+      p.style.top = `${below ? t.bottom + 8 : Math.max(16, t.top - 8 - p.offsetHeight)}px`
+      p.style.transformOrigin = below ? 'top left' : 'bottom left'
+    }
+    place()
+    pop.current?.querySelector<HTMLButtonElement>('[data-confirm]')?.focus()
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+    }
+  }, [open])
+
+  // Escape and outside clicks close only the popover (capture phase, before a Modal's own handlers).
+  useEffect(() => {
+    if (!open) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); close() }
+    }
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (pop.current?.contains(target) || trigger.current?.contains(target)) return
+      e.stopPropagation()
+      close()
+    }
+    window.addEventListener('keydown', onKey, true)
+    window.addEventListener('mousedown', onDown, true)
+    return () => {
+      window.removeEventListener('keydown', onKey, true)
+      window.removeEventListener('mousedown', onDown, true)
+    }
+  }, [open, close])
+
+  return (
+    <>
+      <button ref={trigger} type="button" className={className} disabled={disabled} aria-haspopup="dialog" aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}>
+        {children}
+      </button>
+      {open && createPortal(
+        <div ref={pop} className="popover" role="dialog" aria-labelledby={titleId}>
+          <span id={titleId} style={{ fontSize: 14, fontWeight: 500 }}>{title}</span>
+          {message && <div className="muted" style={{ fontSize: 13, lineHeight: '20px' }}>{message}</div>}
+          <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={close}>Cancel</button>
+            <button type="button" data-confirm className={`btn btn-sm${danger ? ' btn-danger' : ''}`}
+              onClick={() => { setOpen(false); onConfirm() }}>
+              {confirmLabel}
+            </button>
+          </div>
+        </div>,
+        document.body,
+      )}
+    </>
   )
 }

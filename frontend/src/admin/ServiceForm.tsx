@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router'
-import { Field, Modal } from '../components/ui'
+import { ConfirmButton, Field, Modal } from '../components/ui'
 import { api, ApiError, errorMessage } from '../lib/api'
 import { cardLabel, fmtDate } from '../lib/format'
 import { A } from '../lib/sites'
@@ -174,10 +174,22 @@ function RenewalInvoice({ service, onDone }: { service: Service; onDone: () => v
             {card && <span className="dim"> Auto-pay is on: sending charges {cardLabel(card)}.</span>}
           </span>
           <div className="row" style={{ gap: 8 }}>
-            <button type="button" className="btn btn-sm" disabled={issue.isPending}
-              onClick={() => { if (confirm(`Invoice ${service.name} for ${fmtDate(renewal.from)} – ${fmtDate(renewal.to)} and ${card ? 'charge the saved card' : 'email it to the client'}?`)) issue.mutate(true) }}>
+            <ConfirmButton
+              className="btn btn-sm"
+              disabled={issue.isPending}
+              title={card ? 'Invoice and charge the saved card?' : 'Invoice and email the client?'}
+              message={<>
+                {service.name} · {fmtDate(renewal.from)} – {fmtDate(renewal.to)} · {service.price_label}
+                <br />
+                {card
+                  ? <>{cardLabel(card)} is charged now and the client gets a receipt.</>
+                  : <>The invoice is emailed to {service.user?.email ?? 'the client'} with the PDF.</>}
+              </>}
+              confirmLabel={card ? 'Invoice & charge' : 'Invoice & send'}
+              onConfirm={() => issue.mutate(true)}
+            >
               {issue.isPending && <i className="fa-solid fa-circle-notch spin" />}{card ? 'Invoice & charge card' : 'Invoice & send'}
-            </button>
+            </ConfirmButton>
             <button type="button" className="btn btn-ghost btn-sm" disabled={issue.isPending} onClick={() => issue.mutate(false)}>Save as draft</button>
           </div>
         </>
