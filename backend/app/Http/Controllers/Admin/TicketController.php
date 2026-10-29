@@ -9,6 +9,7 @@ use App\Mail\TicketReplyMail;
 use App\Models\Activity;
 use App\Models\Ticket;
 use App\Models\User;
+use App\Support\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
@@ -101,6 +102,7 @@ class TicketController extends Controller
     private function postMessage(Ticket $ticket, User $admin, string $body, bool $notify): void
     {
         $message = $ticket->messages()->create(['user_id' => $admin->id, 'body' => $body]);
+        Audit::log('ticket.admin_replied', ($ticket->wasRecentlyCreated ? 'Opened' : 'Replied on')." ticket {$ticket->reference()}".($notify ? '' : ' (client not emailed)'), $ticket, $ticket->user);
 
         if ($notify && $ticket->user->wants('tick')) {
             Mail::to($ticket->user)->queue(new TicketReplyMail($message));
@@ -113,6 +115,7 @@ class TicketController extends Controller
             return;
         }
         $ticket->update(['status' => $status]);
+        Audit::log('ticket.status', "Moved ticket {$ticket->reference()} to {$status->label()}", $ticket, $ticket->user);
         Activity::log($ticket->user_id, 'ticket', "Ticket {$ticket->reference()} moved to {$status->label()}", $ticket);
     }
 }

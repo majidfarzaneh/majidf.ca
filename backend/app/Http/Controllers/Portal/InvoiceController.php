@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Resources\InvoiceResource;
 use App\Models\Invoice;
 use App\Services\InvoicePdf;
+use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -33,6 +34,7 @@ class InvoiceController extends Controller
     public function pdf(Request $request, Invoice $invoice, InvoicePdf $pdf): Response
     {
         abort_unless($invoice->user_id === $request->user()->id && in_array($invoice->status, [InvoiceStatus::Unpaid, InvoiceStatus::Paid], true), 404);
+        Audit::log('invoice.downloaded', "Downloaded {$invoice->number}", $invoice);
 
         return response($pdf->render($invoice), 200, [
             'Content-Type' => 'application/pdf',

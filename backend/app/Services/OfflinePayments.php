@@ -2,12 +2,13 @@
 
 namespace App\Services;
 
-use App\Mail\AdminAlertMail;
 use App\Mail\PaymentRejectedMail;
 use App\Models\Activity;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\User;
+use App\Support\AdminAlert;
+use App\Support\Audit;
 use App\Support\Money;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -50,7 +51,8 @@ class OfflinePayments
         $numbers = $invoices->pluck('number')->implode(', ');
         $amount = Money::format($payment->amount_cents);
         Activity::log($user, 'payment', "Payment proof sent · {$amount} by {$payment->methodLabel()} · {$numbers}", $payment);
-        AdminAlertMail::dispatch('payment review', "Payment proof to review · {$amount}", array_filter([
+        Audit::log('payment.proof_submitted', "Sent payment proof · {$amount} by {$payment->methodLabel()} · {$numbers}", $payment);
+        AdminAlert::send('payment', "Payment proof to review · {$amount}", array_filter([
             'Client' => $user->company ?: $user->name,
             'Invoices' => $numbers,
             'Method' => ucfirst($payment->methodLabel()),
@@ -64,6 +66,7 @@ class OfflinePayments
     public function approve(Payment $payment, User $admin, ?string $paidOn, bool $sendReceipt): Payment
     {
         $payment->update(['reviewed_at' => now(), 'reviewed_by' => $admin->id]);
+        Audit::log('payment.approved', 'Approved payment proof · '.Money::format($payment->amount_cents).' by '.$payment->methodLabel(), $payment, $payment->user);
 
         return $this->recorder->succeeded($payment, $paidOn ? ['paid_at' => now()->parse($paidOn)] : [], $sendReceipt);
     }
@@ -80,6 +83,7 @@ class OfflinePayments
         $payment->load('invoices', 'user');
         Activity::log($payment->user_id, 'payment', 'Payment proof not accepted · '.$payment->invoices->pluck('number')->implode(', '), $payment);
         Mail::to($payment->user)->queue(new PaymentRejectedMail($payment));
+        Audit::log('payment.rejected', 'Rejected payment proof · '.Money::format($payment->amount_cents).' · '.$reason, $payment, $payment->user);
 
         return $payment;
     }

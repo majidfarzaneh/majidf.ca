@@ -25,6 +25,7 @@ const InvoiceDetail = lazy(() => import('./admin/InvoiceDetail'))
 const Payments = lazy(() => import('./admin/Payments'))
 const AdminTickets = lazy(() => import('./admin/Tickets'))
 const Requests = lazy(() => import('./admin/Requests'))
+const ActivityLog = lazy(() => import('./admin/ActivityLog'))
 
 function portalRoutes(base: string) {
   return (
@@ -53,6 +54,7 @@ function adminRoutes(base: string) {
       <Route path="payments" element={<Payments />} />
       <Route path="tickets/:id?" element={<AdminTickets />} />
       <Route path="requests" element={<Requests />} />
+      <Route path="activity" element={<ActivityLog />} />
     </Route>
   )
 }

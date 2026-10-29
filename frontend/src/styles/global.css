@@ -314,3 +314,29 @@ select.input { appearance: none; background-image: linear-gradient(45deg, transp
 .receipt-preview { display: flex; align-items: center; justify-content: center; min-height: 140px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); overflow: hidden; }
 .receipt-preview img { display: block; max-width: 100%; max-height: 46vh; object-fit: contain; }
 .receipt-preview iframe { width: 100%; height: 46vh; border: none; background: #fff; }
+
+/* ---------- Admin notification bell ---------- */
+.bell { position: relative; }
+.bell-count {
+  position: absolute; top: -5px; right: -5px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  background: var(--red); color: #fff; font-size: 10px; font-weight: 700; line-height: 18px; text-align: center;
+}
+.bell-panel {
+  position: absolute; top: calc(100% + 8px); right: 0; z-index: 40; width: min(380px, calc(100vw - 32px));
+  display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border-strong); border-radius: 8px;
+  box-shadow: 0 24px 60px -16px rgba(0, 0, 0, 0.85); animation: popIn 0.16s var(--ease) both; transform-origin: top right;
+}
+.bell-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px; border-bottom: 1px solid var(--border-soft); }
+.bell-list { max-height: min(460px, 65vh); overflow-y: auto; }
+.bell-item {
+  display: flex; gap: 10px; width: 100%; padding: 12px 14px; text-align: left; background: transparent; border: none;
+  border-bottom: 1px solid var(--border-soft); color: var(--fg-2); cursor: pointer; font: inherit;
+}
+.bell-item:hover { background: var(--surface-hover); }
+.bell-item.unread { background: rgba(0, 114, 238, 0.06); }
+.bell-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--brand); flex: none; margin-top: 6px; }
+.bell-foot {
+  display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px; background: transparent; border: none;
+  color: var(--link); font: inherit; font-size: 12px; cursor: pointer;
+}
+.bell-foot:hover { color: var(--link-hover); }

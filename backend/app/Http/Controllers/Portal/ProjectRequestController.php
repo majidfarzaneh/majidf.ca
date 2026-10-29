@@ -4,9 +4,10 @@ namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ProjectRequestResource;
-use App\Mail\AdminAlertMail;
 use App\Models\Activity;
 use App\Models\ProjectRequest;
+use App\Support\AdminAlert;
+use App\Support\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -26,7 +27,8 @@ class ProjectRequestController extends Controller
         $projectRequest = $user->projectRequests()->create($data + ['status' => 'new']);
 
         Activity::log($user, 'request', 'Project request sent · '.implode(', ', $projectRequest->typeLabels()), $projectRequest);
-        AdminAlertMail::dispatch('project request', 'New project request from '.($user->company ?: $user->name), [
+        Audit::log('request.created', 'Requested a new project · '.implode(', ', $projectRequest->typeLabels()), $projectRequest);
+        AdminAlert::send('request', 'New project request from '.($user->company ?: $user->name), [
             'Building' => implode(', ', $projectRequest->typeLabels()),
             'Budget' => 'CAD '.ProjectRequest::BUDGETS[$data['budget']],
             'Details' => Str::limit($data['description'] ?? '—', 1500),

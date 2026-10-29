@@ -7,6 +7,8 @@ use App\Http\Resources\UserResource;
 use App\Models\Activity;
 use App\Models\Payment;
 use App\Services\StripeGateway;
+use App\Support\AdminAlert;
+use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -32,6 +34,10 @@ class PaymentMethodController extends Controller
 
         $user = $this->stripe->saveCardFromSetup($request->user(), $data['setup_intent']);
         Activity::log($user->id, 'payment', 'Auto-pay on · '.ucfirst($user->card_brand).' •••• '.$user->card_last4);
+        Audit::log('autopay.card_saved', 'Saved a card for auto-pay · '.ucfirst($user->card_brand).' •••• '.$user->card_last4, $user);
+        AdminAlert::send('autopay', ($user->company ?: $user->name).' turned on auto-pay', [
+            'Card' => ucfirst($user->card_brand).' •••• '.$user->card_last4,
+        ], '/clients/'.$user->id);
 
         return new UserResource($user);
     }
@@ -47,6 +53,8 @@ class PaymentMethodController extends Controller
 
         $user->forceFill(['autopay' => $enabled] + ($enabled ? ['autopay_consented_at' => now()] : []))->save();
         Activity::log($user->id, 'payment', $enabled ? 'Auto-pay turned on' : 'Auto-pay turned off');
+        Audit::log($enabled ? 'autopay.on' : 'autopay.off', $enabled ? 'Turned auto-pay on' : 'Turned auto-pay off', $user);
+        AdminAlert::send('autopay', ($user->company ?: $user->name).' turned auto-pay '.($enabled ? 'on' : 'off'), [], '/clients/'.$user->id);
 
         return new UserResource($user);
     }
@@ -56,8 +64,11 @@ class PaymentMethodController extends Controller
     {
         $user = $request->user();
         if ($user->hasSavedCard()) {
+            $card = ucfirst((string) $user->card_brand).' •••• '.$user->card_last4;
             $this->stripe->removeCard($user);
             Activity::log($user->id, 'payment', 'Saved card removed · auto-pay off');
+            Audit::log('autopay.card_removed', "Removed their saved card ({$card}) · auto-pay off", $user);
+            AdminAlert::send('autopay', ($user->company ?: $user->name).' removed their saved card', ['Card' => $card], '/clients/'.$user->id);
         }
 
         return new UserResource($user);

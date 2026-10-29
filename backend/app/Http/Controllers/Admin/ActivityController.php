@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\ActivityResource;
 use App\Models\Activity;
+use App\Models\User;
+use App\Support\Audit;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -20,7 +22,10 @@ class ActivityController extends Controller
             'text' => ['required', 'string', 'max:255'],
         ]);
 
-        return new ActivityResource(Activity::log($data['user_id'], $data['kind'], $data['text']));
+        $activity = Activity::log($data['user_id'], $data['kind'], $data['text']);
+        Audit::log('timeline.posted', "Posted to the client's timeline: {$data['text']}", $activity, User::find($data['user_id']));
+
+        return new ActivityResource($activity);
     }
 
     public function destroy(Activity $activity): JsonResponse

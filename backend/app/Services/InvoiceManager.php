@@ -3,10 +3,11 @@
 namespace App\Services;
 
 use App\Enums\InvoiceStatus;
-use App\Mail\AdminAlertMail;
 use App\Mail\InvoiceMail;
 use App\Models\Activity;
 use App\Models\Invoice;
+use App\Support\AdminAlert;
+use App\Support\Audit;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -65,9 +66,12 @@ class InvoiceManager
             Activity::log($invoice->user_id, 'invoice', "Invoice {$invoice->number} issued · ".Money::format($invoice->total_cents), $invoice);
         }
 
-        if ($email && $invoice->user->wants('inv')) {
+        $emailed = $email && $invoice->user->wants('inv');
+        if ($emailed) {
             Mail::to($invoice->user)->queue(new InvoiceMail($invoice));
         }
+        Audit::log('invoice.sent', ($firstSend ? 'Issued' : 'Re-sent')." {$invoice->number} · ".Money::format($invoice->total_cents)
+            .($emailed ? ' (emailed)' : ' (not emailed)'), $invoice, $invoice->user);
 
         return $invoice;
     }
@@ -75,8 +79,10 @@ class InvoiceManager
     /** Manual "Send reminder": picks the wording that fits the invoice's current state. */
     public function remind(Invoice $invoice): void
     {
-        Mail::to($invoice->user)->queue(new InvoiceMail($invoice, InvoiceMail::reminderKindFor($invoice)));
+        $kind = InvoiceMail::reminderKindFor($invoice);
+        Mail::to($invoice->user)->queue(new InvoiceMail($invoice, $kind));
         $invoice->forceFill(['reminded_at' => now()])->saveQuietly();
+        Audit::log('invoice.reminded', "Sent a reminder for {$invoice->number} (".str_replace('_', ' ', $kind).')', $invoice, $invoice->user);
     }
 
     /**
@@ -107,20 +113,36 @@ class InvoiceManager
         return $kind && ! $invoice->reminderSent($kind) ? $kind : null;
     }
 
-    /** Send an automatic reminder once. "closed" also alerts the admin; client emails respect their preference. */
+    /**
+     * Send an automatic reminder once. Client emails respect their preference; due today, overdue and
+     * closed also notify the admin.
+     */
     public function sendScheduledReminder(Invoice $invoice, string $kind): void
     {
-        if ($invoice->user->wants('inv')) {
+        $emailed = $invoice->user->wants('inv');
+        if ($emailed) {
             Mail::to($invoice->user)->queue(new InvoiceMail($invoice, $kind));
         }
 
-        if ($kind === 'closed') {
-            Activity::log($invoice->user_id, 'invoice', "Invoice {$invoice->number} expired unpaid · ".Money::format($invoice->total_cents), $invoice);
-            AdminAlertMail::dispatch('invoice', "{$invoice->number} expired unpaid · ".Money::format($invoice->total_cents), [
-                'Client' => $invoice->user->company ?: $invoice->user->name,
-                'Invoice' => $invoice->number.' · '.$invoice->description,
+        $amount = Money::format($invoice->total_cents);
+        $label = ['due_soon' => 'due soon', 'due_today' => 'due today', 'overdue' => 'overdue', 'closed' => 'payment window closed'][$kind] ?? $kind;
+        Audit::log("invoice.reminder.{$kind}", "Reminder: {$invoice->number} {$label}".($emailed ? ' (emailed)' : ' (client has invoice emails off)'), $invoice, $invoice->user);
+
+        $client = $invoice->user->company ?: $invoice->user->name;
+        $details = ['Client' => $client, 'Invoice' => $invoice->number.' · '.$invoice->description, 'Amount' => $amount];
+        match ($kind) {
+            'due_today' => AdminAlert::send('invoice', "{$invoice->number} is due today · {$amount}", $details, '/invoices/'.$invoice->id),
+            'overdue' => AdminAlert::send('invoice', "{$invoice->number} is overdue · {$amount}", $details + [
+                'Payable until' => $invoice->pay_until->format('M j, Y'),
+            ], '/invoices/'.$invoice->id),
+            'closed' => AdminAlert::send('invoice', "{$invoice->number} expired unpaid · {$amount}", $details + [
                 'Was due' => $invoice->due_at->format('M j, Y').' (payable until '.$invoice->pay_until->format('M j').')',
-            ], '/invoices/'.$invoice->id);
+            ], '/invoices/'.$invoice->id),
+            default => null,
+        };
+
+        if ($kind === 'closed') {
+            Activity::log($invoice->user_id, 'invoice', "Invoice {$invoice->number} expired unpaid · {$amount}", $invoice);
         }
 
         $invoice->markReminderSent($kind);
@@ -130,6 +152,7 @@ class InvoiceManager
     {
         $invoice->update(['status' => InvoiceStatus::Void]);
         Activity::log($invoice->user_id, 'invoice', "Invoice {$invoice->number} voided", $invoice);
+        Audit::log('invoice.voided', "Voided {$invoice->number} · ".Money::format($invoice->total_cents), $invoice, $invoice->user);
 
         return $invoice;
     }

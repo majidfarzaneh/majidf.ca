@@ -12,6 +12,7 @@ use App\Models\Activity;
 use App\Models\Service;
 use App\Services\RenewalInvoicer;
 use App\Services\UptimeReport;
+use App\Support\Audit;
 use App\Support\Money;
 use App\Support\Tax;
 use Illuminate\Http\JsonResponse;
@@ -49,6 +50,8 @@ class ServiceController extends Controller
         $service = Service::create($this->validated($request));
         Activity::log($service->user_id, 'service', $service->type->label().' added · '.$service->name, $service);
 
+        Audit::log('service.created', "Added service {$service->name} · {$service->priceLabel()}".($notify ? '' : ' (client not emailed)'), $service, $service->user);
+
         // "Email the client" in the admin form; untick it when recording a service the client already knows about.
         if ($notify && $service->status !== ServiceStatus::Cancelled && $service->user->wants('svc')) {
             Mail::to($service->user)->queue(new ServiceAddedMail($service));
@@ -60,7 +63,12 @@ class ServiceController extends Controller
     public function update(Request $request, Service $service): ServiceResource
     {
         $wasInDevelopment = $service->status === ServiceStatus::InDevelopment;
-        $service->update($this->validated($request, $service));
+        $service->fill($this->validated($request, $service));
+        $changed = array_keys($service->getDirty());
+        $service->save();
+        if ($changed) {
+            Audit::log('service.updated', "Edited service {$service->name} (".implode(', ', $changed).')', $service, $service->user);
+        }
 
         if ($wasInDevelopment && $service->status === ServiceStatus::Active) {
             Activity::log($service->user_id, 'milestone', $service->name.' is live', $service);
@@ -91,6 +99,7 @@ class ServiceController extends Controller
 
     public function destroy(Service $service): JsonResponse
     {
+        Audit::log('service.deleted', "Deleted service {$service->name}", null, $service->user);
         $service->delete();
 
         return response()->json(['ok' => true]);

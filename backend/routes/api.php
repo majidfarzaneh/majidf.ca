@@ -70,6 +70,11 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::apiResource('project-requests', Admin\ProjectRequestController::class)->only(['index', 'update', 'destroy']);
 
+        Route::get('activity-log', [Admin\AuditLogController::class, 'index']);
+        Route::get('notifications', [Admin\NotificationController::class, 'index']);
+        Route::post('notifications/read-all', [Admin\NotificationController::class, 'readAll']);
+        Route::post('notifications/{id}/read', [Admin\NotificationController::class, 'read']);
+
         Route::post('activities', [Admin\ActivityController::class, 'store']);
         Route::delete('activities/{activity}', [Admin\ActivityController::class, 'destroy']);
     });

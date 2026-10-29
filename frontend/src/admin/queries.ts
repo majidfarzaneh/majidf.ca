@@ -78,3 +78,47 @@ export const useRequests = (f: { status?: string }) =>
   useQuery({ queryKey: adminKeys.requests(f), queryFn: () => api.get<{ data: ProjectRequest[] }>(`/admin/project-requests${qs(f)}`).then((r) => r.data) })
 
 export const clientLabel = (u?: User | null) => (u ? u.company || u.name : '—')
+
+/** One entry in the admin's notification bell. */
+export interface AdminNotification {
+  id: string
+  at: string
+  read: boolean
+  kind: 'payment' | 'invoice' | 'ticket' | 'request' | 'autopay' | string
+  title: string
+  lines: Record<string, string>
+  path: string | null
+}
+
+/** One line of the admin activity log. */
+export interface AuditEntry {
+  id: number
+  at: string
+  event: string
+  text: string
+  actor: { type: 'client' | 'admin' | 'system'; id: number | null; name: string | null }
+  client: { id: number | null; name: string | null } | null
+  ip: string | null
+  meta: Record<string, string> | null
+  path: string | null
+}
+
+export interface AuditFilters { client_id?: number; actor?: string; category?: string; search?: string; page?: number }
+
+export const notificationKeys = ['admin', 'notifications'] as const
+
+/** The bell: checked every 30 seconds while the tab is open, and whenever it regains focus. */
+export const useNotifications = () =>
+  useQuery({
+    queryKey: notificationKeys,
+    queryFn: () => api.get<{ data: AdminNotification[]; unread: number }>('/admin/notifications'),
+    refetchInterval: 30_000,
+    refetchOnWindowFocus: true,
+  })
+
+export const useActivityLog = (f: AuditFilters) =>
+  useQuery({
+    queryKey: ['admin', 'activity-log', f] as const,
+    queryFn: () => api.get<{ data: AuditEntry[]; meta: { current_page: number; last_page: number; total: number }; categories: Record<string, string> }>(`/admin/activity-log${qs({ ...f })}`),
+    placeholderData: (prev) => prev,
+  })

@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Enums\InvoiceStatus;
-use App\Mail\AdminAlertMail;
 use App\Mail\InvoiceMail;
 use App\Mail\PaymentReceiptMail;
 use App\Models\Invoice;
@@ -37,7 +36,8 @@ class AutopayTest extends TestCase
     {
         parent::setUp();
         Mail::fake();
-        config(['services.stripe.key' => 'pk_test_x', 'services.stripe.secret' => 'sk_test_x', 'business.admin_email' => 'admin@example.com']);
+        config(['services.stripe.key' => 'pk_test_x', 'services.stripe.secret' => 'sk_test_x']);
+        User::factory()->admin()->create(); // receives the bell notifications
 
         $this->client = User::factory()->create();
         $this->client->forceFill(['stripe_customer_id' => 'cus_1'])->save();
@@ -131,7 +131,7 @@ class AutopayTest extends TestCase
         $this->assertSame(['failed', 'pi_declined'], [$payment->status, $payment->stripe_payment_intent_id]);
         Mail::assertQueued(InvoiceMail::class, fn (InvoiceMail $m) => $m->kind === 'autopay_failed'
             && $m->hasTo($this->client->email) && str_contains($m->render(), 'Your card was declined'));
-        Mail::assertQueued(AdminAlertMail::class, fn (AdminAlertMail $m) => $m->hasTo('admin@example.com'));
+        $this->assertAdminNotified('Auto-pay failed');
         Mail::assertNotQueued(PaymentReceiptMail::class);
     }
 

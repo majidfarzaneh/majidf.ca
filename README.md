@@ -67,6 +67,11 @@ Without keys the pay dialog shows e-Transfer instructions instead, and you mark 
   - `uptime:check` every 5 min: pings each service's monitor URL and feeds the 30-day uptime bars and the "all systems up" indicator.
 - Clients choose which emails they get (Profile → Notifications). Sign-in codes and receipts always send. Invoice reminders follow the *New invoices* switch; your *expired unpaid* alert always sends.
 
+## Admin activity log & notifications
+
+- **Activity log** (admin → *Activity*, `audit_logs`, kept forever): sign-ins (and wrong codes) with IP and browser, client actions (profile, notification settings, tickets, project requests, payment proofs, saved cards/auto-pay, invoice downloads), your own admin actions (clients, services, invoices, payments, tickets, requests, timeline posts) and the system's (auto-invoices, reminders, renewal reminders, Stripe payments, auto-pay). Filter by client, who did it, category or text. `App\Support\Audit::log()` writes it; it never breaks the action it records.
+- **Notifications** (the bell in the admin header, Laravel database notifications, checked every 30 s): new ticket / ticket reply, new project request, invoice paid, card payment failed, payment proof to review, auto-pay failed / card removed / auto-pay on or off, invoice due today, overdue, and expired unpaid. `App\Support\AdminAlert::send()` notifies every active admin. Admin alerts are in-app only (no emails).
+
 ## Production — majidf.ca
 
 Runs on `91.99.207.212` (shared box, see `/www/wwwroot/SERVER-RUNBOOK.md`) from `/www/wwwroot/majidf.ca`.

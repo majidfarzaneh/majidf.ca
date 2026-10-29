@@ -3,7 +3,6 @@
 namespace Tests\Feature;
 
 use App\Enums\InvoiceStatus;
-use App\Mail\AdminAlertMail;
 use App\Mail\InvoiceMail;
 use App\Mail\PaymentReceiptMail;
 use App\Mail\PaymentRejectedMail;
@@ -77,7 +76,7 @@ class OfflinePaymentTest extends TestCase
         $payment = Payment::findOrFail($id);
         Storage::disk('local')->assertExists($payment->receipt_path);
         $this->assertSame('etransfer.png', $payment->receipt_name);
-        Mail::assertQueued(AdminAlertMail::class, fn ($m) => str_contains($m->heading, 'Payment proof to review'));
+        $this->assertAdminNotified('Payment proof to review');
 
         $this->getJson('/api/portal/invoices')->assertOk()
             ->assertJsonPath('data.0.display_status', 'In review')

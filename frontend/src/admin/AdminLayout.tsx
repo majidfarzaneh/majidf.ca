@@ -2,6 +2,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router'
 import { Shell } from '../components/Shell'
 import { useMe } from '../lib/auth'
 import { useTitle } from '../lib/hooks'
+import NotificationBell from './NotificationBell'
 import { useAdminDashboard } from './queries'
 import { A, splitHosts } from '../lib/sites'
 
@@ -13,6 +14,7 @@ const PAGES: Record<string, [string, string]> = {
   payments: ['billing', 'Payments'],
   tickets: ['support', 'Tickets'],
   requests: ['pipeline', 'Project requests'],
+  activity: ['audit', 'Activity log'],
 }
 
 export default function AdminLayout() {
@@ -31,9 +33,12 @@ export default function AdminLayout() {
       eyebrow={eyebrow}
       title={title}
       action={
-        <button className="btn" style={{ padding: '9px 14px' }} onClick={() => navigate(A('/invoices/new'))}>
-          <i className="fa-solid fa-plus" style={{ fontSize: 11 }} /><span className="hide-sm">New invoice</span>
-        </button>
+        <>
+          <NotificationBell />
+          <button className="btn" style={{ padding: '9px 14px' }} onClick={() => navigate(A('/invoices/new'))}>
+            <i className="fa-solid fa-plus" style={{ fontSize: 11 }} /><span className="hide-sm">New invoice</span>
+          </button>
+        </>
       }
       nav={[
         { to: A(''), label: 'Overview', icon: 'fa-solid fa-chart-simple', end: true },
@@ -43,6 +48,7 @@ export default function AdminLayout() {
         { to: A('/payments'), label: 'Payments', icon: 'fa-solid fa-money-bill-wave', badge: dash?.kpis.payments_to_review },
         { to: A('/tickets'), label: 'Tickets', icon: 'fa-solid fa-life-ring', badge: dash?.kpis.awaiting_reply },
         { to: A('/requests'), label: 'Requests', icon: 'fa-solid fa-paper-plane', badge: dash?.kpis.new_requests },
+        { to: A('/activity'), label: 'Activity', icon: 'fa-solid fa-clock-rotate-left' },
       ]}
     >
       <Outlet />

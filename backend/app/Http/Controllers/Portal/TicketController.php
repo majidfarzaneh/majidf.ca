@@ -5,8 +5,9 @@ namespace App\Http\Controllers\Portal;
 use App\Enums\TicketStatus;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\TicketResource;
-use App\Mail\AdminAlertMail;
 use App\Models\Ticket;
+use App\Support\AdminAlert;
+use App\Support\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
@@ -50,7 +51,8 @@ class TicketController extends Controller
             return $ticket;
         });
 
-        AdminAlertMail::dispatch('ticket', "New ticket {$ticket->reference()} · {$ticket->subject}", [
+        Audit::log('ticket.opened', "Opened ticket {$ticket->reference()} · {$ticket->subject}", $ticket);
+        AdminAlert::send('ticket', "New ticket {$ticket->reference()} · {$ticket->subject}", [
             'Client' => $user->company ?: $user->name,
             'Message' => Str::limit($data['body'], 600),
         ], '/tickets/'.$ticket->id);
@@ -70,7 +72,8 @@ class TicketController extends Controller
             'last_activity_at' => now(),
         ]);
 
-        AdminAlertMail::dispatch('ticket', "Reply on {$ticket->reference()} · {$ticket->subject}", [
+        Audit::log('ticket.replied', "Replied on ticket {$ticket->reference()}", $ticket);
+        AdminAlert::send('ticket', "Reply on {$ticket->reference()} · {$ticket->subject}", [
             'Client' => $user->company ?: $user->name,
             'Message' => Str::limit($data['body'], 600),
         ], '/tickets/'.$ticket->id);

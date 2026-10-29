@@ -166,6 +166,7 @@ export default function ClientDetail() {
             <dt>Auto-pay</dt><dd>{c.card ? `${c.autopay ? 'On' : 'Off'} · ${cardLabel(c.card)}` : 'No saved card'}</dd>
             <dt>Emails</dt><dd>{Object.entries(c.prefs).filter(([, v]) => v).map(([k]) => ({ inv: 'invoices', svc: 'services', tick: 'tickets', renew: 'renewals', news: 'news' })[k]).join(', ') || 'none'}</dd>
           </dl>
+          <Link to={A(`/activity?client=${c.id}`)} className="btn-link" style={{ fontSize: 13 }}><i className="fa-solid fa-clock-rotate-left" style={{ fontSize: 11, marginRight: 6 }} />Activity log for this client</Link>
           {c.admin_notes && (<><hr className="divider" /><span className="eyebrow">private notes</span><p className="muted" style={{ margin: 0, fontSize: 13, whiteSpace: 'pre-wrap' }}>{c.admin_notes}</p></>)}
           <hr className="divider" />
           <button className="btn btn-danger btn-sm" style={{ alignSelf: 'flex-start' }} disabled={remove.isPending}

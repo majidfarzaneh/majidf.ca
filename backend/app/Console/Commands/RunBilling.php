@@ -9,6 +9,7 @@ use App\Models\LoginCode;
 use App\Models\Service;
 use App\Services\InvoiceManager;
 use App\Services\RenewalInvoicer;
+use App\Support\Audit;
 use App\Support\Money;
 use Illuminate\Console\Attributes\Description;
 use Illuminate\Console\Attributes\Signature;
@@ -61,6 +62,7 @@ class RunBilling extends Command
         foreach ($services as $service) {
             if ($service->user->wants('renew') && $service->billing_cycle?->isRecurring()) {
                 Mail::to($service->user)->queue(new RenewalReminderMail($service));
+                Audit::log('service.renewal_reminder', "Renewal reminder: {$service->name} renews ".$service->renews_at->format('M j, Y'), $service, $service->user);
             }
             $service->forceFill(['renewal_reminded_at' => now()])->save();
         }

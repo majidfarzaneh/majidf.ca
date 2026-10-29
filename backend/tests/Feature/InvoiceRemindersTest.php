@@ -2,7 +2,6 @@
 
 namespace Tests\Feature;
 
-use App\Mail\AdminAlertMail;
 use App\Mail\InvoiceMail;
 use App\Models\Invoice;
 use App\Models\User;
@@ -23,6 +22,7 @@ class InvoiceRemindersTest extends TestCase
         Mail::fake();
         $this->travelTo(now()->setDate(2026, 10, 1)->setTime(8, 0));
         $this->client = User::factory()->create();
+        User::factory()->admin()->create(); // receives the bell notifications
     }
 
     /** An invoice issued Oct 1, due Oct 15, payable online until Oct 15 + $grace. */
@@ -65,7 +65,7 @@ class InvoiceRemindersTest extends TestCase
         $this->assertFalse($invoice->isPayable());
         $this->assertTrue($invoice->isExpired());
         $this->assertSame('Expired', $invoice->displayStatus());
-        Mail::assertQueued(AdminAlertMail::class, fn ($m) => str_contains($m->heading, 'expired unpaid'));
+        $this->assertAdminNotified('expired unpaid');
 
         $this->assertSame([], $this->runOn('2026-10-26'));             // no more reminders once closed
     }
@@ -95,7 +95,7 @@ class InvoiceRemindersTest extends TestCase
 
         $this->assertSame([], $this->runOn('2026-10-16'));
         $this->assertTrue($invoice->refresh()->reminderSent('closed'));
-        Mail::assertQueued(AdminAlertMail::class);
+        $this->assertAdminNotified('expired unpaid');
     }
 
     public function test_moving_the_due_date_restarts_the_schedule(): void

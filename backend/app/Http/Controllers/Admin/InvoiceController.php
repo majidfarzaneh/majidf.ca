@@ -10,6 +10,8 @@ use App\Models\Payment;
 use App\Services\InvoiceManager;
 use App\Services\InvoicePdf;
 use App\Services\PaymentRecorder;
+use App\Support\Audit;
+use App\Support\Money;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -46,6 +48,7 @@ class InvoiceController extends Controller
     {
         [$data, $items] = $this->validated($request);
         $invoice = $this->invoices->save(new Invoice, $data, $items);
+        Audit::log('invoice.created', "Created {$invoice->number} · ".Money::format($invoice->total_cents), $invoice, $invoice->user);
 
         if ($request->boolean('send')) {
             $this->invoices->send($invoice, $request->boolean('email', true));
@@ -60,6 +63,7 @@ class InvoiceController extends Controller
 
         [$data, $items] = $this->validated($request, $invoice);
         $invoice = $this->invoices->save($invoice, $data, $items);
+        Audit::log('invoice.updated', "Edited {$invoice->number} · ".Money::format($invoice->total_cents), $invoice, $invoice->user);
 
         if ($request->boolean('send') && $invoice->status === InvoiceStatus::Draft) {
             $this->invoices->send($invoice, $request->boolean('email', true));
@@ -71,6 +75,7 @@ class InvoiceController extends Controller
     public function destroy(Invoice $invoice): JsonResponse
     {
         abort_unless($invoice->status === InvoiceStatus::Draft, 422, 'Only drafts can be deleted. Void the invoice instead.');
+        Audit::log('invoice.deleted', "Deleted draft {$invoice->number}", null, $invoice->user);
         $invoice->delete();
 
         return response()->json(['ok' => true]);

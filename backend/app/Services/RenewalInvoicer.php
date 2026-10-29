@@ -7,6 +7,7 @@ use App\Models\Activity;
 use App\Models\Invoice;
 use App\Models\Payment;
 use App\Models\Service;
+use App\Support\Audit;
 use App\Support\Money;
 use App\Support\Tax;
 use Illuminate\Support\Facades\DB;
@@ -71,6 +72,7 @@ class RenewalInvoicer
 
             $service->forceFill(['renews_at' => $next, 'renewal_reminded_at' => null])->save();
             Activity::log($service->user_id, 'invoice', "Renewal invoice {$invoice->number} · {$service->name} · ".Money::format($invoice->total_cents), $invoice);
+            Audit::log('invoice.renewal_created', "Created renewal invoice {$invoice->number} for {$service->name} ({$start->format('M j')} – {$next->copy()->subDay()->format('M j, Y')})", $invoice, $service->user);
 
             return $invoice;
         });

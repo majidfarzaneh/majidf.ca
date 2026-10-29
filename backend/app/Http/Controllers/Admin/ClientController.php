@@ -16,6 +16,7 @@ use App\Http\Resources\UserResource;
 use App\Mail\WelcomeMail;
 use App\Models\User;
 use App\Services\OfflinePayments;
+use App\Support\Audit;
 use App\Support\Tax;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -46,10 +47,10 @@ class ClientController extends Controller
     {
         $data = $this->validated($request);
         $client = User::create($data + ['role' => Role::Client, 'notification_prefs' => User::DEFAULT_PREFS]);
-
         if ($request->boolean('send_invite')) {
             Mail::to($client)->queue(new WelcomeMail($client));
         }
+        Audit::log('client.created', "Added client {$client->email}".($request->boolean('send_invite') ? ' and sent a portal invite' : ''), $client, $client);
 
         return new UserResource($client);
     }
@@ -73,7 +74,12 @@ class ClientController extends Controller
     public function update(Request $request, User $client): UserResource
     {
         abort_if($client->isAdmin(), 404);
-        $client->update($this->validated($request, $client));
+        $client->fill($this->validated($request, $client));
+        $changed = array_keys($client->getDirty());
+        $client->save();
+        if ($changed) {
+            Audit::log('client.updated', 'Edited client ('.implode(', ', $changed).')', $client, $client);
+        }
 
         return new UserResource($client);
     }
@@ -81,6 +87,7 @@ class ClientController extends Controller
     public function destroy(User $client): JsonResponse
     {
         abort_if($client->isAdmin(), 404);
+        Audit::log('client.deleted', "Deleted client {$client->email} and all their data", null, null, ['client_id' => $client->id, 'name' => $client->company ?: $client->name]);
         $client->delete();
         Storage::disk(OfflinePayments::DISK)->deleteDirectory("receipts/{$client->id}");
 
@@ -91,6 +98,7 @@ class ClientController extends Controller
     {
         abort_if($client->isAdmin(), 404);
         Mail::to($client)->queue(new WelcomeMail($client));
+        Audit::log('client.invited', 'Sent a portal invite', $client, $client);
 
         return response()->json(['ok' => true]);
     }

@@ -7,6 +7,7 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Services\LoginCodes;
 use App\Services\StripeGateway;
+use App\Support\Audit;
 use App\Support\OfflineMethods;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -37,6 +38,7 @@ class AuthController extends Controller
         $user = User::query()->where('email', $email)->where('is_active', true)->first();
         if ($user) {
             $this->codes->send($user, $request->ip());
+            Audit::log('auth.code_requested', 'Requested a sign-in code', $user, actor: $user);
         }
 
         return response()->json([
@@ -61,6 +63,9 @@ class AuthController extends Controller
 
         $user = User::query()->where('email', $email)->where('is_active', true)->first();
         if (! $user || ! $this->codes->verify($user, $data['code'])) {
+            if ($user) {
+                Audit::log('auth.failed', 'Entered a wrong or expired sign-in code', $user, actor: $user);
+            }
             throw ValidationException::withMessages(['code' => 'That code is wrong or has expired.']);
         }
 
@@ -68,6 +73,7 @@ class AuthController extends Controller
 
         Auth::guard('web')->login($user, remember: true);
         $request->session()->regenerate();
+        Audit::log('auth.login', 'Signed in', $user, meta: ['user_agent' => mb_substr((string) $request->userAgent(), 0, 255)]);
 
         $user->forceFill([
             'last_login_at' => now(),
@@ -101,6 +107,9 @@ class AuthController extends Controller
 
     public function logout(Request $request): JsonResponse
     {
+        if ($user = $request->user()) {
+            Audit::log('auth.logout', 'Signed out', $user);
+        }
         Auth::guard('web')->logout();
         $request->session()->invalidate();
         $request->session()->regenerateToken();
