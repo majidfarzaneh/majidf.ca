@@ -43,7 +43,8 @@ return [
     'portal_url' => rtrim(env('PORTAL_URL', rtrim(env('FRONTEND_URL', 'http://localhost'), '/').'/portal'), '/'),
     'admin_url' => rtrim(env('ADMIN_URL', rtrim(env('FRONTEND_URL', 'http://localhost'), '/').'/admin'), '/'),
 
-    // Sign-in codes.
-    'login_code_ttl_minutes' => 10,
+    // Sign-in codes. Wrong guesses are capped per code; the request/verify rate limits live in AuthController.
+    'login_code_ttl_minutes' => 2,
     'login_code_max_attempts' => 5,
+    'login_code_resend_seconds' => 60,
 ];

@@ -11,13 +11,24 @@ import type { Me } from '../lib/types'
 import './login.css'
 
 const EMPTY = ['', '', '', '', '', '']
-const RESEND_SECONDS = 30
+
+/** POST /auth/code reply: how long the code lives and when another may be requested (seconds). */
+type CodeSent = { expires_in?: number; resend_in?: number }
+/** Absolute deadlines (ms) for the code on screen, so the countdowns survive re-renders. */
+type Deadlines = { expiresAt: number; resendAt: number }
+
+const deadlines = (res: CodeSent | undefined): Deadlines => ({
+  expiresAt: Date.now() + (res?.expires_in ?? 120) * 1000,
+  resendAt: Date.now() + (res?.resend_in ?? 60) * 1000,
+})
+const secondsLeft = (at: number, now: number) => Math.max(0, Math.ceil((at - now) / 1000))
+const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 
 export default function Login() {
   useTitle(site === 'admin' ? 'Admin' : 'Client portal')
   const { data: me, isLoading } = useMe()
   const [params] = useSearchParams()
-  const [screen, setScreen] = useState<'login' | 'otp'>('login')
+  const [sent, setSent] = useState<Deadlines | null>(null)
   const [email, setEmail] = useState(params.get('email') ?? '')
   const admin = site === 'admin'
 
@@ -37,15 +48,15 @@ export default function Login() {
         <div className="eyebrow row fade-up" style={{ letterSpacing: '.08em', animationDelay: '.3s' }}><span className="cursor-block" />secure · passwordless</div>
       </div>
       <div className="auth-panel">
-        {screen === 'login'
-          ? <EmailStep email={email} setEmail={setEmail} onSent={() => setScreen('otp')} admin={admin} />
-          : <CodeStep email={email} onBack={() => setScreen('login')} />}
+        {sent === null
+          ? <EmailStep email={email} setEmail={setEmail} onSent={(res) => setSent(deadlines(res))} admin={admin} />
+          : <CodeStep email={email} sent={sent} onResent={(res) => setSent(deadlines(res))} onBack={() => setSent(null)} />}
       </div>
     </div>
   )
 }
 
-function EmailStep({ email, setEmail, onSent, admin }: { email: string; setEmail: (v: string) => void; onSent: () => void; admin: boolean }) {
+function EmailStep({ email, setEmail, onSent, admin }: { email: string; setEmail: (v: string) => void; onSent: (res: CodeSent) => void; admin: boolean }) {
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -55,8 +66,7 @@ function EmailStep({ email, setEmail, onSent, admin }: { email: string; setEmail
     setSending(true)
     setError(null)
     try {
-      await api.post('/auth/code', { email })
-      onSent()
+      onSent(await api.post<CodeSent>('/auth/code', { email }))
     } catch (err) {
       setError(errorMessage(err))
     } finally {
@@ -84,7 +94,7 @@ function EmailStep({ email, setEmail, onSent, admin }: { email: string; setEmail
   )
 }
 
-function CodeStep({ email, onBack }: { email: string; onBack: () => void }) {
+function CodeStep({ email, sent, onResent, onBack }: { email: string; sent: Deadlines; onResent: (res: CodeSent) => void; onBack: () => void }) {
   const qc = useQueryClient()
   const navigate = useNavigate()
   const location = useLocation()
@@ -92,18 +102,23 @@ function CodeStep({ email, onBack }: { email: string; onBack: () => void }) {
   const [otp, setOtp] = useState(EMPTY)
   const [error, setError] = useState<string | null>(null)
   const [verifying, setVerifying] = useState(false)
-  const [resendIn, setResendIn] = useState(RESEND_SECONDS)
+  const [now, setNow] = useState(Date.now)
   const refs = useRef<(HTMLInputElement | null)[]>([])
 
   useEffect(() => {
     refs.current[0]?.focus()
   }, [])
 
+  const expiresIn = secondsLeft(sent.expiresAt, now)
+  const resendIn = secondsLeft(sent.resendAt, now)
+  const expired = expiresIn === 0
+
+  // Tick while either countdown is running.
   useEffect(() => {
-    if (resendIn <= 0) return
-    const id = window.setTimeout(() => setResendIn((s) => s - 1), 1000)
-    return () => window.clearTimeout(id)
-  }, [resendIn])
+    if (expired && resendIn === 0) return
+    const id = window.setInterval(() => setNow(Date.now()), 1000)
+    return () => window.clearInterval(id)
+  }, [expired, resendIn])
 
   const focus = (i: number) => {
     const el = refs.current[i]
@@ -112,6 +127,7 @@ function CodeStep({ email, onBack }: { email: string; onBack: () => void }) {
 
   const verify = async (digits = otp) => {
     const code = digits.join('')
+    if (expired) { setError('This code has expired. Send a new one.'); return }
     if (code.length < 6) { setError('Enter all 6 digits.'); return }
     setVerifying(true)
     setError(null)
@@ -158,8 +174,10 @@ function CodeStep({ email, onBack }: { email: string; onBack: () => void }) {
 
   const resend = async () => {
     try {
-      await api.post('/auth/code', { email })
-      setResendIn(RESEND_SECONDS)
+      onResent(await api.post<CodeSent>('/auth/code', { email }))
+      setOtp(EMPTY)
+      setError(null)
+      focus(0)
       toast.ok('New code sent to ' + email, 'fa-solid fa-paper-plane')
     } catch (err) {
       toast.error(errorMessage(err))
@@ -191,7 +209,10 @@ function CodeStep({ email, onBack }: { email: string; onBack: () => void }) {
         ))}
       </div>
       {error && <div className="field-error"><i className="fa-solid fa-circle-exclamation" />{error}</div>}
-      <button className="btn btn-lg" onClick={() => verify()} disabled={verifying}>
+      {expired
+        ? <div className="field-error"><i className="fa-solid fa-clock" />Code expired. Send a new one below.</div>
+        : <div className="dim mono" style={{ fontSize: 12 }}>Code expires in {clock(expiresIn)}</div>}
+      <button className="btn btn-lg" onClick={() => verify()} disabled={verifying || expired}>
         {verifying ? <><i className="fa-solid fa-circle-notch spin" />Verifying</> : 'Continue'}
       </button>
       <div className="spread dim" style={{ fontSize: 12 }}>

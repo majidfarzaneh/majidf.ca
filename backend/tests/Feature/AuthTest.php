@@ -67,6 +67,79 @@ class AuthTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_code_expires_after_two_minutes(): void
+    {
+        Mail::fake();
+        $user = User::factory()->create();
+
+        $this->postJson('/api/auth/code', ['email' => $user->email])
+            ->assertOk()->assertJson(['expires_in' => 120, 'resend_in' => 60]);
+        $code = Mail::sent(LoginCodeMail::class)->first()->code;
+
+        $this->travel(121)->seconds();
+
+        $this->postJson('/api/auth/verify', ['email' => $user->email, 'code' => $code])->assertStatus(422);
+        $this->assertGuest();
+    }
+
+    public function test_another_code_waits_for_the_resend_window(): void
+    {
+        Mail::fake();
+        $user = User::factory()->create();
+
+        $this->postJson('/api/auth/code', ['email' => $user->email])->assertOk();
+        $this->postJson('/api/auth/code', ['email' => $user->email])
+            ->assertStatus(429)->assertHeader('Retry-After')->assertJsonValidationErrors('email');
+        Mail::assertSentCount(1);
+
+        $this->travel(61)->seconds();
+
+        $this->postJson('/api/auth/code', ['email' => $user->email])->assertOk();
+        Mail::assertSentCount(2);
+    }
+
+    public function test_codes_for_one_email_are_capped_across_ips(): void
+    {
+        Mail::fake();
+        $user = User::factory()->create();
+
+        for ($i = 1; $i <= 5; $i++) {
+            $this->withServerVariables(['REMOTE_ADDR' => "203.0.113.$i"])
+                ->postJson('/api/auth/code', ['email' => $user->email])->assertOk();
+            $this->travel(61)->seconds();
+        }
+
+        $this->withServerVariables(['REMOTE_ADDR' => '203.0.113.99'])
+            ->postJson('/api/auth/code', ['email' => $user->email])->assertStatus(429);
+        Mail::assertSentCount(5);
+    }
+
+    public function test_one_ip_cannot_request_codes_for_many_emails(): void
+    {
+        Mail::fake();
+
+        for ($i = 1; $i <= 10; $i++) {
+            $this->postJson('/api/auth/code', ['email' => "someone$i@example.com"])->assertOk();
+        }
+
+        // Unknown emails count too, so the limit doesn't reveal which accounts exist.
+        $this->postJson('/api/auth/code', ['email' => 'someone11@example.com'])->assertStatus(429);
+    }
+
+    public function test_guesses_against_one_email_are_capped_across_ips(): void
+    {
+        $user = User::factory()->create();
+
+        for ($i = 1; $i <= 10; $i++) {
+            $this->withServerVariables(['REMOTE_ADDR' => "198.51.100.$i"])
+                ->postJson('/api/auth/verify', ['email' => $user->email, 'code' => '123456'])->assertStatus(422);
+        }
+
+        $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.99'])
+            ->postJson('/api/auth/verify', ['email' => $user->email, 'code' => '123456'])
+            ->assertStatus(429)->assertJsonValidationErrors('code');
+    }
+
     public function test_inactive_client_cannot_sign_in(): void
     {
         Mail::fake();
