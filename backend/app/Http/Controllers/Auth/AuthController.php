@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\LoginCodes;
 use App\Services\StripeGateway;
 use App\Support\Audit;
+use App\Support\Impersonation;
 use App\Support\OfflineMethods;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Exceptions\HttpResponseException;
@@ -86,8 +87,12 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
+        $impersonator = Impersonation::impersonator();
+
         return response()->json([
             'user' => new UserResource($request->user()),
+            // Set while an admin is signed in as this client ("Log in as client").
+            'impersonator' => $impersonator ? ['id' => $impersonator->id, 'name' => $impersonator->name] : null,
             'stripe' => [
                 'enabled' => app(StripeGateway::class)->enabled(),
                 'key' => config('services.stripe.key'),
@@ -103,6 +108,20 @@ class AuthController extends Controller
             ],
             'offline_methods' => collect(OfflineMethods::enabled())->map(fn ($m, $key) => ['method' => $key] + $m)->values(),
         ]);
+    }
+
+    /** End "Log in as client" and switch the session back to the admin. */
+    public function stopImpersonating(Request $request): JsonResponse
+    {
+        $client = $request->user();
+        $admin = Impersonation::stop();
+        abort_unless($admin, 403, 'Not signed in as a client.');
+        Audit::log('auth.impersonate_stopped', 'Stopped signing in as the client', $client, $client, actor: $admin);
+
+        // The request's user is still the client; answer for the admin now signed in.
+        $request->setUserResolver(fn () => $admin);
+
+        return $this->me($request);
     }
 
     public function logout(Request $request): JsonResponse

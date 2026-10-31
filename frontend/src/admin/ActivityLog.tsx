@@ -90,6 +90,7 @@ function Row({ entry: e }: { entry: AuditEntry }) {
       <td style={{ fontSize: 13 }}>
         {e.path ? <Link to={A(e.path)} className="kbd-link">{e.text}</Link> : e.text}
         {e.meta?.user_agent && <div className="dim ellipsis" style={{ fontSize: 11, maxWidth: 420 }}>{e.meta.user_agent}</div>}
+        {e.meta?.impersonated_by && <div className="dim" style={{ fontSize: 11 }}><i className="fa-solid fa-user-secret" style={{ marginRight: 5 }} />by {e.meta.impersonated_by}, signed in as the client</div>}
       </td>
       <td className="nowrap" style={{ fontSize: 13 }}>
         {e.client ? (e.client.id ? <Link to={A(`/clients/${e.client.id}`)}>{e.client.name}</Link> : <span className="dim">{e.client.name} (deleted)</span>) : <span className="dim">—</span>}

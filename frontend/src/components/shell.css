@@ -26,6 +26,16 @@
   border-bottom: 1px solid var(--border); position: sticky; top: 0; background: rgba(9, 9, 11, 0.85); backdrop-filter: blur(8px); z-index: 5;
 }
 .shell-content { padding: 28px clamp(16px, 3vw, 36px) 48px; display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.shell-banner {
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 8px 14px; padding: 8px 16px;
+  background: var(--amber); color: #18120a; font-size: 13px; font-weight: 500; text-align: center;
+}
+.shell-banner button {
+  border: 1px solid rgba(24, 18, 10, 0.35); background: transparent; color: inherit; border-radius: 6px; padding: 4px 10px;
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.shell-banner button:hover { background: rgba(24, 18, 10, 0.1); }
+.shell-banner button:disabled { opacity: 0.6; cursor: default; }
 .shell-menu, .shell-close { display: none; }
 .shell-scrim { display: none; }
 

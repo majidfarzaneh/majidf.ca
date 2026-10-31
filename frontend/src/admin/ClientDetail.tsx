@@ -12,7 +12,7 @@ import InvoicesTable from './InvoicesTable'
 import { adminKeys, useClient, useMeta } from './queries'
 import ServiceForm from './ServiceForm'
 import ServicesTable from './ServicesTable'
-import { A } from '../lib/sites'
+import { A, P } from '../lib/sites'
 
 type Tab = 'services' | 'invoices' | 'payments' | 'tickets' | 'requests' | 'activity'
 
@@ -30,6 +30,12 @@ export default function ClientDetail() {
   const invite = useMutation({
     mutationFn: () => api.post(`/admin/clients/${id}/invite`),
     onSuccess: () => toast.ok('Invite sent', 'fa-solid fa-paper-plane'),
+    onError: (e) => toast.error(errorMessage(e)),
+  })
+  const impersonate = useMutation({
+    mutationFn: () => api.post(`/admin/clients/${id}/impersonate`),
+    // A full page load: the portal may be on another subdomain, and every cached query belongs to the admin.
+    onSuccess: () => { qc.clear(); window.location.assign(P('')) },
     onError: (e) => toast.error(errorMessage(e)),
   })
   const remove = useMutation({
@@ -74,6 +80,10 @@ export default function ClientDetail() {
                 {!c.is_active && <Badge label="Inactive" />}
                 <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}><i className="fa-solid fa-pen" style={{ fontSize: 11 }} />Edit</button>
                 <button className="btn btn-ghost btn-sm" onClick={() => invite.mutate()} disabled={invite.isPending}><i className="fa-solid fa-paper-plane" style={{ fontSize: 11 }} />Send invite</button>
+                <button className="btn btn-ghost btn-sm" onClick={() => impersonate.mutate()} disabled={impersonate.isPending || !c.is_active}
+                  title={c.is_active ? 'See the portal exactly as this client does' : 'Inactive clients can’t sign in'}>
+                  <i className="fa-solid fa-user-secret" style={{ fontSize: 11 }} />Log in as client
+                </button>
                 <button className="btn btn-sm" onClick={() => navigate(A(`/invoices/new?client=${c.id}`))}><i className="fa-solid fa-file-invoice" style={{ fontSize: 11 }} />New invoice</button>
               </div>
             </div>

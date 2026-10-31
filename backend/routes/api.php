@@ -13,6 +13,7 @@ Route::prefix('auth')->middleware('throttle:30,1')->group(function () {
     Route::post('code', [AuthController::class, 'requestCode']);
     Route::post('verify', [AuthController::class, 'verify']);
     Route::post('logout', [AuthController::class, 'logout'])->middleware('auth:sanctum');
+    Route::post('stop-impersonating', [AuthController::class, 'stopImpersonating'])->middleware('auth:sanctum');
 });
 
 Route::middleware('auth:sanctum')->group(function () {
@@ -48,6 +49,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
         Route::apiResource('clients', Admin\ClientController::class);
         Route::post('clients/{client}/invite', [Admin\ClientController::class, 'invite']);
+        Route::post('clients/{client}/impersonate', [Admin\ClientController::class, 'impersonate']);
 
         Route::apiResource('services', Admin\ServiceController::class);
         Route::post('services/{service}/renewal-invoice', [Admin\ServiceController::class, 'invoiceRenewal']);

@@ -24,7 +24,12 @@ class Audit
     {
         try {
             // The scheduler, queue and Stripe webhooks have no signed-in user: that's the system.
+            $acting = $actor === null;
             $actor ??= Auth::user(); // the guard this request authenticated with (sanctum in the API)
+            // An admin signed in as a client: the client is the actor, but say who was really there.
+            if ($acting && $actor && ($admin = Impersonation::impersonator())) {
+                $meta += ['impersonated_by' => $admin->name];
+            }
             $client ??= $actor && ! $actor->isAdmin() ? $actor : null;
 
             AuditLog::create([

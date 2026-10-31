@@ -1,10 +1,15 @@
+import { useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Outlet, useLocation, useNavigate } from 'react-router'
 import { Shell, SystemStatus } from '../components/Shell'
+import { api, errorMessage } from '../lib/api'
 import { useMe } from '../lib/auth'
 import { firstName, greeting } from '../lib/format'
 import { useTitle } from '../lib/hooks'
 import { useDashboard } from './queries'
-import { P, splitHosts } from '../lib/sites'
+import { A, P, splitHosts } from '../lib/sites'
+import { useToast } from '../lib/toast'
+import type { User } from '../lib/types'
 
 const PAGES: Record<string, [string, string | ((name: string) => string)]> = {
   '': ['overview', (name) => `${greeting()}, ${name}`],
@@ -33,6 +38,7 @@ export default function PortalLayout() {
       subtitle={user.company ?? user.email}
       eyebrow={eyebrow}
       title={heading}
+      banner={me!.impersonator && <ImpersonationBanner user={user} />}
       status={<SystemStatus up={dash?.uptime.up} />}
       action={
         <button className="btn" style={{ padding: '9px 14px' }} onClick={() => navigate(P('/request'))}>
@@ -50,5 +56,31 @@ export default function PortalLayout() {
     >
       <Outlet />
     </Shell>
+  )
+}
+
+/** Shown while an admin is signed in as this client, with the way back to the admin. */
+function ImpersonationBanner({ user }: { user: User }) {
+  const qc = useQueryClient()
+  const toast = useToast()
+  const [leaving, setLeaving] = useState(false)
+
+  const back = async () => {
+    setLeaving(true)
+    try {
+      await api.post('/auth/stop-impersonating')
+      qc.clear()
+      window.location.assign(A(`/clients/${user.id}`))
+    } catch (e) {
+      toast.error(errorMessage(e))
+      setLeaving(false)
+    }
+  }
+
+  return (
+    <div className="shell-banner" role="status">
+      <span><i className="fa-solid fa-user-secret" style={{ marginRight: 8 }} />You’re signed in as {user.company || user.name}. Anything you do is logged.</span>
+      <button onClick={back} disabled={leaving}>Back to admin</button>
+    </div>
   )
 }

@@ -15,7 +15,7 @@ export interface NavItem {
 }
 
 /** Sidebar + sticky header layout shared by the client portal and the admin area. */
-export function Shell({ nav, user, subtitle, eyebrow, title, status, action, children }: {
+export function Shell({ nav, user, subtitle, eyebrow, title, status, action, banner, children }: {
   nav: NavItem[]
   user: User
   subtitle: string
@@ -23,6 +23,8 @@ export function Shell({ nav, user, subtitle, eyebrow, title, status, action, chi
   title: string
   status?: ReactNode
   action?: ReactNode
+  /** A strip above the header, e.g. while an admin is signed in as a client. */
+  banner?: ReactNode
   children: ReactNode
 }) {
   const location = useLocation()
@@ -69,6 +71,7 @@ export function Shell({ nav, user, subtitle, eyebrow, title, status, action, chi
       {open && <div className="shell-scrim" onClick={() => setOpen(false)} />}
 
       <div className="shell-main">
+        {banner}
         <header className="shell-head">
           <div className="row" style={{ gap: 12, minWidth: 0 }}>
             <button className="icon-btn shell-menu" onClick={() => setOpen(true)} aria-label="Open menu"><i className="fa-solid fa-bars" /></button>

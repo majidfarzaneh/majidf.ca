@@ -43,6 +43,8 @@ export interface OfflineMethod {
 
 export interface Me {
   user: User
+  /** Set while an admin is signed in as this client. */
+  impersonator: { id: number; name: string } | null
   offline_methods: OfflineMethod[]
   stripe: { enabled: boolean; key: string | null }
   business: {

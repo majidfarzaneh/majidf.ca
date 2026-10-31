@@ -17,6 +17,7 @@ use App\Mail\WelcomeMail;
 use App\Models\User;
 use App\Services\OfflinePayments;
 use App\Support\Audit;
+use App\Support\Impersonation;
 use App\Support\Tax;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -99,6 +100,19 @@ class ClientController extends Controller
         abort_if($client->isAdmin(), 404);
         Mail::to($client)->queue(new WelcomeMail($client));
         Audit::log('client.invited', 'Sent a portal invite', $client, $client);
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** "Log in as client": switch this session to the client's until they stop impersonating. */
+    public function impersonate(Request $request, User $client): JsonResponse
+    {
+        abort_if($client->isAdmin(), 404);
+        abort_unless($client->is_active, 422, 'This client is inactive. Activate them first.');
+
+        $admin = $request->user();
+        Audit::log('auth.impersonated', 'Signed in as the client', $client, $client);
+        Impersonation::start($admin, $client);
 
         return response()->json(['ok' => true]);
     }
