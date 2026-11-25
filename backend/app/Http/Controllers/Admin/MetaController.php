@@ -28,6 +28,7 @@ class MetaController extends Controller
                 'payment_terms_days' => config('business.payment_terms_days'),
                 'grace_days' => config('business.grace_days'),
                 'reminder_days_before' => config('business.reminder_days_before'),
+                'renewal_invoice_lead_days' => config('business.renewal_invoice_lead_days'),
                 'next_invoice_number' => Invoice::nextNumber(),
             ],
         ]);

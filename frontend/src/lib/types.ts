@@ -82,6 +82,10 @@ export interface Service {
   user_id?: number
   user?: User
   auto_invoice?: boolean
+  /** Days before the renewal date its invoice is issued; null = business default. */
+  invoice_lead_days?: number | null
+  /** When the daily job issues the next renewal invoice. */
+  renewal_invoice_on?: string | null
   tax_rate?: number | null
   tax_label?: string | null
   tax?: EffectiveTax

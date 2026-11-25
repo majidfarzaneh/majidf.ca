@@ -20,7 +20,7 @@
   @endif
 </table>
 @if ($autoInvoice)
-<p style="margin:16px 0 0;font-size:13px;color:#a1a1aa">An invoice is issued automatically on each renewal date, and you'll get a reminder {{ config('business.renewal_reminder_days') }} days before.</p>
+<p style="margin:16px 0 0;font-size:13px;color:#a1a1aa">An invoice is issued automatically {{ $leadDays ? $leadDays.' '.\Illuminate\Support\Str::plural('day', $leadDays).' before' : 'on' }} each renewal date, and you'll get a reminder {{ config('business.renewal_reminder_days') }} days before.</p>
 @endif
 @include('mail.button', ['url' => $url, 'label' => 'View services'])
 <p style="margin:16px 0 0;font-size:12px;color:#71717a">Questions about it? Reply to this email or open a ticket in the portal.</p>

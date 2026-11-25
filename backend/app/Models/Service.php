@@ -6,6 +6,7 @@ use App\Enums\BillingCycle;
 use App\Enums\ServiceStatus;
 use App\Enums\ServiceType;
 use App\Support\Money;
+use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -13,7 +14,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable([
-    'user_id', 'name', 'type', 'status', 'detail', 'meta', 'price_cents', 'billing_cycle', 'auto_invoice',
+    'user_id', 'name', 'type', 'status', 'detail', 'meta', 'price_cents', 'billing_cycle', 'auto_invoice', 'invoice_lead_days',
     'progress', 'progress_label', 'hours_total', 'hours_used', 'started_at', 'renews_at', 'monitor_url', 'sort',
     'tax_rate', 'tax_label',
 ])]
@@ -46,6 +47,26 @@ class Service extends Model
     public function uptimeChecks(): HasMany
     {
         return $this->hasMany(UptimeCheck::class);
+    }
+
+    /** Days before the renewal date its invoice is issued: its own setting, else the business default. */
+    public function invoiceLeadDays(): int
+    {
+        return $this->invoice_lead_days ?? (int) config('business.renewal_invoice_lead_days');
+    }
+
+    /**
+     * When the daily job issues the next renewal invoice, or null without a recurring renewal. Never a
+     * full cycle early, so one run can't bill a period that hasn't started yet twice.
+     */
+    public function renewalInvoiceDate(): ?CarbonInterface
+    {
+        if ($this->renews_at === null || ! $this->billing_cycle?->isRecurring()) {
+            return null;
+        }
+        $cycleDays = (int) $this->renews_at->diffInDays($this->billing_cycle->advance($this->renews_at));
+
+        return $this->renews_at->copy()->subDays(min($this->invoiceLeadDays(), $cycleDays - 1));
     }
 
     public function priceLabel(): string

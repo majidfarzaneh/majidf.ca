@@ -39,6 +39,9 @@ class ServiceResource extends JsonResource
                 'user_id' => $this->user_id,
                 'user' => new UserResource($this->whenLoaded('user')),
                 'auto_invoice' => $this->auto_invoice,
+                // Own setting (null = business default) and the day the daily job will issue the invoice.
+                'invoice_lead_days' => $this->invoice_lead_days,
+                'renewal_invoice_on' => $this->renewalInvoiceDate()?->toDateString(),
                 // Own setting (null = same as the client) and what its renewal invoices get.
                 'tax_rate' => $this->tax_rate,
                 'tax_label' => $this->tax_label,

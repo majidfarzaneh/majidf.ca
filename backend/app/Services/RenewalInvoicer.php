@@ -15,7 +15,7 @@ use Illuminate\Validation\ValidationException;
 
 /**
  * Issues a recurring service's invoice for its next period (renews_at → one cycle later) and moves
- * renews_at forward. Used by billing:run on the renewal date and by the admin's "Invoice renewal".
+ * renews_at forward. Used by billing:run on the invoice date (Service::renewalInvoiceDate()) and by the admin's "Invoice renewal".
  */
 class RenewalInvoicer
 {
@@ -36,7 +36,7 @@ class RenewalInvoicer
     /**
      * Create the invoice and roll the service forward one cycle. With $send, the invoice is issued:
      * auto-pay clients are charged on their saved card, everyone else is emailed the invoice.
-     * With $onlyIfDue (the daily job), nothing happens unless the renewal date is still today or earlier.
+     * With $onlyIfDue (the daily job), nothing happens unless the invoice date is still today or earlier.
      *
      * @return array{invoice: Invoice, payment: ?Payment}|null
      */
@@ -46,7 +46,7 @@ class RenewalInvoicer
         $invoice = DB::transaction(function () use ($service, $onlyIfDue) {
             $service = Service::query()->with('user')->lockForUpdate()->findOrFail($service->id);
             // Already invoiced early by the admin since the job picked it up.
-            if ($onlyIfDue && ($service->renews_at === null || $service->renews_at->gt(today()))) {
+            if ($onlyIfDue && ! $service->renewalInvoiceDate()?->lte(today())) {
                 return null;
             }
             if ($reason = $this->blocker($service)) {

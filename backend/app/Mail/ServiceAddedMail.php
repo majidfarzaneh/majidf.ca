@@ -37,6 +37,7 @@ class ServiceAddedMail extends Mailable implements ShouldQueue
             'price' => $service->priceLabel() === '—' ? null : $service->priceLabel(),
             'renews' => $recurring ? $service->renews_at?->format('M j, Y') : null,
             'autoInvoice' => $recurring && $service->auto_invoice,
+            'leadDays' => (int) $service->renewalInvoiceDate()?->diffInDays($service->renews_at),
             'url' => config('business.portal_url').'/services',
         ]);
     }

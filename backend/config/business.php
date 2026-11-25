@@ -36,6 +36,9 @@ return [
     'invoice_start' => (int) env('INVOICE_START', 2001),
     'ticket_start' => (int) env('TICKET_START', 300),
     'renewal_reminder_days' => 14,
+    // Auto-invoiced renewals are issued this many days before the renewal date (0 = on the date).
+    // A service can override it; either way it's capped to just under one billing cycle.
+    'renewal_invoice_lead_days' => (int) env('INVOICE_RENEWAL_LEAD_DAYS', 0),
 
     // Public URLs of the three sites (used for links in emails and Stripe redirects).
     // With subdomains: majidf.local, panel.majidf.local, admin.majidf.local. Without: /portal and /admin paths.

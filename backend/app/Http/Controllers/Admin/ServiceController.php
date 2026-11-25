@@ -117,6 +117,7 @@ class ServiceController extends Controller
             'price' => ['nullable', 'numeric', 'min:0', 'max:1000000'],
             'billing_cycle' => ['nullable', Rule::enum(BillingCycle::class)],
             'auto_invoice' => ['boolean'],
+            'invoice_lead_days' => ['nullable', 'integer', 'min:0', 'max:90'],
             'progress' => ['nullable', 'numeric', 'min:0', 'max:100'],
             'progress_label' => ['nullable', 'string', 'max:120'],
             'hours_total' => ['nullable', 'numeric', 'min:0'],

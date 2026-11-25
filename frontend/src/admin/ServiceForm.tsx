@@ -27,6 +27,7 @@ export default function ServiceForm({ service, userId, onClose }: { service?: Se
     price: service?.price_cents != null ? String(service.price_cents / 100) : '',
     billing_cycle: service?.billing_cycle ?? '',
     auto_invoice: service?.auto_invoice ?? false,
+    invoice_lead_days: service?.invoice_lead_days != null ? String(service.invoice_lead_days) : '',
     progress: service?.raw_progress != null ? String(service.raw_progress) : '',
     progress_label: service?.progress_label ?? '',
     hours_total: service?.hours_total != null ? String(service.hours_total) : '',
@@ -47,7 +48,7 @@ export default function ServiceForm({ service, userId, onClose }: { service?: Se
       user_id: f.user_id || undefined,
       price: nullable(f.price), billing_cycle: nullable(f.billing_cycle), progress: nullable(f.progress),
       hours_total: nullable(f.hours_total), hours_used: nullable(f.hours_used), started_at: nullable(f.started_at),
-      renews_at: nullable(f.renews_at), monitor_url: nullable(f.monitor_url),
+      renews_at: nullable(f.renews_at), monitor_url: nullable(f.monitor_url), invoice_lead_days: nullable(f.invoice_lead_days),
       tax_rate: nullable(f.tax_rate), tax_label: f.tax_rate === '' ? null : nullable(f.tax_label),
     }
   }
@@ -109,9 +110,19 @@ export default function ServiceForm({ service, userId, onClose }: { service?: Se
           </div>
           <label className="checkbox" style={{ opacity: recurring ? 1 : 0.5 }}>
             <input type="checkbox" disabled={!recurring} checked={f.auto_invoice && recurring} onChange={(e) => setF({ ...f, auto_invoice: e.target.checked })} />
-            Auto-invoice on each renewal date (issues and emails the invoice, then moves the date forward)
+            Auto-invoice each renewal (issues and emails the invoice, then moves the renewal date forward)
           </label>
           {err('auto_invoice') && <div className="field-error">{err('auto_invoice')}</div>}
+          {f.auto_invoice && recurring && (
+            <div className="form-grid">
+              <Field label="invoice days before renewal" error={err('invoice_lead_days')}
+                hint={(f.invoice_lead_days === '' ? `Empty uses the default (${meta?.defaults.renewal_invoice_lead_days ?? 0}).` : '0 invoices on the renewal date.')
+                  + (service?.auto_invoice && service.renewal_invoice_on ? ` Next invoice: ${fmtDate(service.renewal_invoice_on)}.` : '')}>
+                <input className="input" inputMode="numeric" value={f.invoice_lead_days} onChange={set('invoice_lead_days')}
+                  placeholder={String(meta?.defaults.renewal_invoice_lead_days ?? 0)} />
+              </Field>
+            </div>
+          )}
           <TaxField value={f} onChange={(v) => setF({ ...f, ...v })} error={err('tax_rate')}
             inheritName="Same as client" inherited={owner?.tax ?? (meta && { rate: meta.defaults.tax_rate, label: meta.defaults.tax_label })} />
           {service?.renewal && <RenewalInvoice service={service} onDone={onClose} />}

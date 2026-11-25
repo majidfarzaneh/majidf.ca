@@ -8,7 +8,7 @@ export interface Meta {
   billing_cycles: Option[]
   payment_methods: string[]
   activity_kinds: string[]
-  defaults: { tax_rate: number; tax_label: string; payment_terms_days: number; grace_days: number; reminder_days_before: number; next_invoice_number: string }
+  defaults: { tax_rate: number; tax_label: string; payment_terms_days: number; grace_days: number; reminder_days_before: number; renewal_invoice_lead_days: number; next_invoice_number: string }
 }
 
 export interface AdminDashboardData {

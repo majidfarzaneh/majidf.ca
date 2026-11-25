@@ -30,14 +30,17 @@ class RunBilling extends Command
     }
 
     /**
-     * Services with auto-invoicing get an invoice on their renewal date, then roll forward one cycle
-     * (RenewalInvoicer). Clients with auto-pay are charged on their saved card instead of being emailed.
+     * Services with auto-invoicing get an invoice their lead days before the renewal date (on it by
+     * default), then roll forward one cycle (RenewalInvoicer). Clients with auto-pay are charged on
+     * their saved card instead of being emailed.
      */
     private function recurringInvoices(RenewalInvoicer $renewals): void
     {
+        $maxLead = max((int) config('business.renewal_invoice_lead_days'), (int) Service::query()->max('invoice_lead_days'));
         $due = Service::query()->where('auto_invoice', true)
             ->where('status', ServiceStatus::Active)
-            ->whereNotNull('price_cents')->whereDate('renews_at', '<=', today())->get();
+            ->whereNotNull('price_cents')->whereDate('renews_at', '<=', today()->addDays($maxLead))->get()
+            ->filter(fn (Service $service) => $service->renewalInvoiceDate()?->lte(today()));
 
         foreach ($due as $service) {
             if ($renewals->blocker($service)) {
